@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Autisti Netfleet</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#10b981">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+            --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #dcfce7 100%);
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --danger: #ef4444;
+        }
+
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            padding: 20px; margin: 0; min-height: 100vh;
+            background: var(--bg-gradient); 
+            display: flex; justify-content: center; align-items: flex-start;
+            color: var(--text-main);
+        }
+
+        body.rtl { direction: rtl; }
+
+        .app-container { width: 100%; max-width: 480px; margin-top: 10px; }
+
+        .card { 
+            background: var(--card-bg); padding: 24px; border-radius: 20px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-bottom: 20px; 
+            backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        h1, h2 { text-align: center; margin-top: 0; font-weight: 800; }
+        h1 { font-size: 24px; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        #loginSection { display: block; }
+        #appSection { display: none; }
+
+        .tabs { display: flex; margin-bottom: 20px; background: #f1f5f9; border-radius: 14px; padding: 5px; }
+        .tab { 
+            flex: 1; padding: 10px 5px; text-align: center; cursor: pointer; 
+            font-weight: 600; border-radius: 10px; color: var(--text-muted); 
+            transition: all 0.3s ease; font-size: 14px;
+        }
+        .tab.active { background: white; color: #3b82f6; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        
+        .form-section { display: none; }
+        .form-section.active { display: block; animation: fadeIn 0.4s ease; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .form-group { margin-bottom: 20px; }
+        label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 8px; color: #475569; }
+        
+        input[type="email"], input[type="password"], select { 
+            width: 100%; padding: 14px; box-sizing: border-box; 
+            border: 2px solid var(--border-color); border-radius: 12px; 
+            font-size: 15px; background: #f8fafc; transition: border-color 0.3s, background-color 0.3s;
+        }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; background: white; }
+
+        .file-wrapper {
+            position: relative; display: flex; align-items: center;
+            background: #f8fafc; border: 2px dashed var(--border-color);
+            border-radius: 12px; padding: 10px; cursor: pointer; transition: border-color 0.3s;
+        }
+        .file-wrapper:hover { border-color: #3b82f6; }
+        #fileInput { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; left: 0; top: 0; }
+        .file-btn { background: #3b82f6; color: white; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; margin-right: 10px; }
+        body.rtl .file-btn { margin-right: 0; margin-left: 10px; }
+        .file-text { font-size: 14px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        button { 
+            display: block; width: 100%; padding: 16px; font-size: 16px; cursor: pointer; 
+            background: var(--primary-gradient); color: white; border: none; 
+            border-radius: 14px; font-weight: 700; margin-top: 10px; 
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4); }
+        button:active { transform: translateY(0); }
+
+        .btn-secondary { 
+            background: white; color: var(--text-main); border: 2px solid var(--border-color); 
+            box-shadow: none; margin-top: 15px; font-weight: 600;
+        }
+        .btn-secondary:hover { transform: translateY(-2px); border-color: #cbd5e1; }
+        
+        .btn-logout { color: var(--danger); margin-top: 10px; }
+        .btn-logout:hover { background: #fef2f2; border-color: var(--danger); }
+        
+        #statusMsg { text-align: center; margin-top: 20px; font-weight: 600; padding: 14px; border-radius: 12px; display: none; }
+
+        /* Stili per la Cronologia */
+        .history-item { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; margin-bottom: 10px; font-size: 14px; text-align: left; }
+        body.rtl .history-item { text-align: right; border-left: none; border-right: 4px solid; }
+        .history-item.stato { border-left: 4px solid #10b981; }
+        .history-item.doc { border-left: 4px solid #3b82f6; }
+        body.rtl .history-item.stato { border-right-color: #10b981; }
+        body.rtl .history-item.doc { border-right-color: #3b82f6; }
+        .history-date { font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
+        .history-link { display: inline-block; margin-top: 8px; color: white; background: #3b82f6; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600; }
+        .history-link:hover { background: #2563eb; }
+        #listaCronologia { max-height: 350px; overflow-y: auto; padding-right: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div id="loginSection" class="card">
+        <h1 id="t-welcome">Netfleet Autisti 🚛</h1>
+        <form id="formLogin">
+            <div class="form-group">
+                <label id="t-email-label">Email Autista</label>
+                <input type="email" id="emailInput" placeholder="mario.rossi@netfleet.biz" required>
+            </div>
+            <div class="form-group">
+                <label id="t-pass-label">Password</label>
+                <input type="password" id="passwordInput" placeholder="••••••••" required>
+            </div>
+            <button type="submit" id="t-btn-login">Accedi all'App</button>
+        </form>
+        <button class="btn-secondary" type="button" onclick="toggleLanguage()" id="t-btn-lang-login">🇮🇹 Lingua: Italiano</button>
+    </div>
+
+    <div id="appSection">
+        <div class="card" style="text-align: center; padding: 15px;">
+            <h2 style="font-size: 20px; margin: 0;"><span id="t-hello">Ciao</span>, <span id="nomeAutistaLabel" style="color: #3b82f6;"></span> 👋</h2>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" id="t-tab-status" onclick="switchTab('stato')">📍 Stato</div>
+                <div class="tab" id="t-tab-docs" onclick="switchTab('documenti')">📄 Documenti</div>
+                <div class="tab" id="t-tab-history" onclick="switchTab('cronologia')">🕒 Storico</div>
+            </div>
+
+            <div id="statoSection" class="form-section active">
+                <form id="formStato">
+                    <div class="form-group">
+                        <label id="t-status-label">Aggiorna Stato:</label>
+                        <select id="statoSelect" required></select>
+                    </div>
+                    <button type="submit" id="t-btn-send-status">Invia Stato</button>
+                </form>
+            </div>
+
+            <div id="documentiSection" class="form-section">
+                <form id="formDocumenti">
+                    <div class="form-group">
+                        <label id="t-file-label">Carica Foto o PDF:</label>
+                        <div class="file-wrapper">
+                            <span class="file-btn" id="t-browse">Sfoglia</span>
+                            <span class="file-text" id="t-no-file">Nessun file selezionato</span>
+                            <input type="file" id="fileInput" accept="image/*,application/pdf" required onchange="updateFileName(this)">
+                        </div>
+                    </div>
+                    <button type="submit" id="t-btn-send-doc">Invia Documento</button>
+                </form>
+            </div>
+
+            <div id="cronologiaSection" class="form-section">
+                <h3 id="t-history-title" style="text-align: center; margin-top: 0; font-size: 16px;">Le tue ultime attività</h3>
+                <button class="btn-secondary" type="button" onclick="caricaCronologia()" style="margin-top: 0; margin-bottom: 15px; padding: 10px;" id="t-btn-refresh">🔄 Aggiorna Storico</button>
+                <div id="listaCronologia"></div>
+            </div>
+        </div>
+
+        <button class="btn-secondary" type="button" id="t-btn-lang" onclick="toggleLanguage()">🇮🇹 Lingua: Italiano</button>
+        <button class="btn-secondary btn-logout" type="button" id="t-btn-logout" onclick="eseguiLogout()">Esci dall'Account</button>
+    </div>
+
+    <div id="statusMsg"></div>
+</div>
+
+<script>
+    const PB_URL = 'INSERT_YOUR_URL_HERE';
+    const BOT_TOKEN = 'INSERT_YOUR_BOT_TOKEN_HERE';
+    const CHAT_ID = 'INSERT_YOUR_CHATID_HERE';
+
+    const translations = {
+        it: {
+            welcome: "Netfleet Autisti 🚛", emailLabel: "Email Autista", passLabel: "Password", btnLogin: "Accedi all'App",
+            hello: "Ciao", tabStatus: "📍 Stato", tabDocs: "📄 Documenti", tabHistory: "🕒 Storico", statusLabel: "Aggiorna Stato:",
+            selectPlaceholder: "-- Seleziona --", btnSendStatus: "Invia Stato", fileLabel: "Carica Foto o PDF:",
+            browse: "Sfoglia", noFile: "Nessun file selezionato", btnSendDoc: "Invia Documento", btnLogout: "Esci dall'Account",
+            btnLang: "🇮🇹 Lingua: Italiano", msgAuth: "⏳ Accesso...", msgAuthSuccess: "✅ Accesso effettuato!",
+            msgAuthErr: "❌ Credenziali errate", msgGPS: "🌍 Acquisizione GPS...", msgSaving: "⏳ Salvataggio...",
+            msgSuccess: "✅ Inviato con successo!", msgError: "❌ Errore API", 
+            historyTitle: "Le tue ultime attività", btnRefresh: "🔄 Aggiorna", lblState: "Stato inviato:", lblDoc: "Documento allegato", openDoc: "Apri file", noData: "Nessun dato trovato.", loading: "⏳ Caricamento in corso...",
+            options: [
+                { v: "🟢 Partenza", t: "🟢 Partenza" },
+                { v: "🔋 Arrivo Base di Carico/Scarico", t: "🔋 Arrivo Base di Carico/Scarico" },
+                { v: "🔋 Partenza da Base di Carico/Scarico", t: "🔋 Partenza da Base di Carico/Scarico" },
+                { v: "⏸️ Pausa", t: "⏸️ Pausa" },
+                { v: "✔️ Arrivo a punto di Consegna", t: "✔️ Arrivo a punto di Consegna" },
+                { v: "✔️ Partenza da punto di Consegna", t: "✔️ Partenza da punto di Consegna" },
+                { v: "🏁 🅿️ Fine Viaggio (Rientro a parcheggio)", t: "🏁 🅿️ Fine Viaggio (Rientro a parcheggio)" },
+                { v: "🏁 🏠 Fine Viaggio (Rientro a casa)", t: "🏁 🏠 Fine Viaggio (Rientro a casa)" }
+            ]
+        },
+        ar: {
+            welcome: "سائقي نيت فليت 🚛", emailLabel: "البريد الإلكتروني", passLabel: "كلمة المرور", btnLogin: "تسجيل الدخول",
+            hello: "مرحباً", tabStatus: "📍 الحالة", tabDocs: "📄 وثائق", tabHistory: "🕒 السجل", statusLabel: "تحديث الحالة:",
+            selectPlaceholder: "-- اختر الحالة --", btnSendStatus: "إرسال الحالة", fileLabel: "تحميل صورة أو ملف:",
+            browse: "تصفح", noFile: "لم يتم اختيار ملف", btnSendDoc: "إرسال المستند", btnLogout: "تسجيل الخروج",
+            btnLang: "🇲🇦 اللغة: العربية", msgAuth: "⏳ جاري الدخول...", msgAuthSuccess: "✅ تم تسجيل الدخول!",
+            msgAuthErr: "❌ بيانات غير صحيحة", msgGPS: "🌍 جاري تحديد الموقع...", msgSaving: "⏳ جاري الإرسال...",
+            msgSuccess: "✅ تم بنجاح!", msgError: "❌ خطأ في الاتصال",
+            historyTitle: "أنشطتك الأخيرة", btnRefresh: "🔄 تحديث", lblState: "الحالة المرسلة:", lblDoc: "مستند مرفق", openDoc: "فتح الملف", noData: "لا توجد بيانات.", loading: "⏳ جاري التحميل...",
+            options: [
+                { v: "🟢 Partenza", t: "🟢 المغادرة" },
+                { v: "🔋 Arrivo Base di Carico/Scarico", t: "🔋 الوصول لمركز التحميل/التفريغ" },
+                { v: "🔋 Partenza da Base di Carico/Scarico", t: "🔋 المغادرة من مركز التحميل/التفريغ" },
+                { v: "⏸️ Pausa", t: "⏸️ استراحة" },
+                { v: "✔️ Arrivo a punto di Consegna", t: "✔️ الوصول لنقطة التسليم" },
+                { v: "✔️ Partenza da punto di Consegna", t: "✔️ المغادرة من نقطة التسليم" },
+                { v: "🏁 🅿️ Fine Viaggio (Rientro a parcheggio)", t: "🏁 🅿️ نهاية الرحلة (العودة للموقف)" },
+                { v: "🏁 🏠 Fine Viaggio (Rientro a casa)", t: "🏁 🏠 نهاية الرحلة (العودة للمنزل)" }
+            ]
+        }
+    };
+
+    let currentLang = localStorage.getItem('app_lang');
+    if (!translations[currentLang]) currentLang = 'it'; 
+
+    function toggleLanguage() { changeLanguage(currentLang === 'it' ? 'ar' : 'it'); }
+
+    function changeLanguage(lang) {
+        currentLang = lang;
+        localStorage.setItem('app_lang', lang);
+        document.body.classList.toggle('rtl', lang === 'ar');
+        
+        const t = translations[lang];
+        document.getElementById('t-welcome').innerText = t.welcome;
+        document.getElementById('t-email-label').innerText = t.emailLabel;
+        document.getElementById('t-pass-label').innerText = t.passLabel;
+        document.getElementById('t-btn-login').innerText = t.btnLogin;
+        document.getElementById('t-hello').innerText = t.hello;
+        document.getElementById('t-tab-status').innerText = t.tabStatus;
+        document.getElementById('t-tab-docs').innerText = t.tabDocs;
+        document.getElementById('t-tab-history').innerText = t.tabHistory;
+        document.getElementById('t-status-label').innerText = t.statusLabel;
+        document.getElementById('t-btn-send-status').innerText = t.btnSendStatus;
+        document.getElementById('t-file-label').innerText = t.fileLabel;
+        document.getElementById('t-btn-send-doc').innerText = t.btnSendDoc;
+        document.getElementById('t-btn-logout').innerText = t.btnLogout;
+        document.getElementById('t-btn-lang').innerText = t.btnLang;
+        document.getElementById('t-btn-lang-login').innerText = t.btnLang;
+        document.getElementById('t-browse').innerText = t.browse;
+        document.getElementById('t-history-title').innerText = t.historyTitle;
+        document.getElementById('t-btn-refresh').innerText = t.btnRefresh;
+        
+        const fileInput = document.getElementById('fileInput');
+        if(fileInput && fileInput.files.length === 0) { document.getElementById('t-no-file').innerText = t.noFile; }
+
+        const select = document.getElementById('statoSelect');
+        const currentValue = select.value;
+        select.innerHTML = `<option value="">${t.selectPlaceholder}</option>`;
+        t.options.forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt.v; el.innerText = opt.t;
+            if(opt.v === currentValue) el.selected = true;
+            select.appendChild(el);
+        });
+        
+        if(document.getElementById('cronologiaSection').classList.contains('active')){ caricaCronologia(); }
+    }
+
+    function updateFileName(input) {
+        const textSpan = document.getElementById('t-no-file');
+        textSpan.innerText = input.files.length > 0 ? input.files[0].name : translations[currentLang].noFile;
+    }
+
+    let userToken = localStorage.getItem('pb_token');
+    let userData = null;
+    try { userData = JSON.parse(localStorage.getItem('pb_user')); } catch(e) { localStorage.removeItem('pb_user'); }
+
+    function initApp() {
+        changeLanguage(currentLang);
+        if (userToken && userData) {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('appSection').style.display = 'block';
+            document.getElementById('nomeAutistaLabel').innerText = userData.name || userData.email || "Autista Sconosciuto";
+        } else {
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('appSection').style.display = 'none';
+        }
+    }
+    initApp();
+
+    function getOrarioItaliano() { return new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+
+    function showMsg(testo, colore) {
+        const msg = document.getElementById('statusMsg');
+        msg.innerText = testo; msg.style.display = 'block';
+        if(colore === 'green') { msg.style.background = '#dcfce7'; msg.style.color = '#166534'; msg.style.border = '1px solid #bbf7d0'; }
+        else if(colore === 'red') { msg.style.background = '#fee2e2'; msg.style.color = '#991b1b'; msg.style.border = '1px solid #fecaca'; }
+        else if(colore === 'blue') { msg.style.background = '#dbeafe'; msg.style.color = '#1e40af'; msg.style.border = '1px solid #bfdbfe'; }
+        else { msg.style.background = '#fef9c3'; msg.style.color = '#854d0e'; msg.style.border = '1px solid #fef08a'; }
+        setTimeout(() => msg.style.display = 'none', 5000);
+    }
+
+    function switchTab(id) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
+        let targetId = id === 'stato' ? 'status' : (id === 'documenti' ? 'docs' : 'history');
+        document.getElementById('t-tab-' + targetId).classList.add('active');
+        document.getElementById(id + 'Section').classList.add('active');
+        if (id === 'cronologia') { caricaCronologia(); }
+    }
+
+    function ottieniPosizione() {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) { resolve({ testo: "GPS non supportato", link: "N/A" }); return; }
+            navigator.geolocation.getCurrentPosition(
+                (p) => { resolve({ testo: `${p.coords.latitude}, ${p.coords.longitude}`, link: `https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}` }); },
+                (e) => { resolve({ testo: "Posizione negata", link: "N/A" }); },
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+            );
+        });
+    }
+
+    document.getElementById('formLogin').onsubmit = async (e) => {
+        e.preventDefault();
+        const t = translations[currentLang]; showMsg(t.msgAuth, "orange");
+        try {
+            const resp = await fetch(`${PB_URL}/api/collections/users/auth-with-password`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identity: document.getElementById('emailInput').value, password: document.getElementById('passwordInput').value })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                localStorage.setItem('pb_token', data.token); localStorage.setItem('pb_user', JSON.stringify(data.record));
+                userToken = data.token; userData = data.record;
+                document.getElementById('formLogin').reset(); showMsg(t.msgAuthSuccess, "green"); initApp();
+            } else { showMsg(t.msgAuthErr, "red"); }
+        } catch(err) { showMsg(t.msgError, "red"); }
+    };
+
+    function eseguiLogout() { localStorage.clear(); userToken = null; userData = null; initApp(); }
+
+    document.getElementById('formStato').onsubmit = async (e) => {
+        e.preventDefault();
+        const t = translations[currentLang];
+        const val = document.getElementById('statoSelect').value; 
+        if(!val) return;
+        const nomeAutista = userData.name || userData.email || "Autista Sconosciuto";
+        
+        showMsg(t.msgGPS, "blue");
+        const pos = await ottieniPosizione();
+        
+        try {
+            showMsg(t.msgSaving, "orange");
+            const resp = await fetch(`${PB_URL}/api/collections/stati_viaggio/records`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
+                body: JSON.stringify({ autista: nomeAutista, stato: val, orario_locale: getOrarioItaliano(), posizione_gps: pos.testo, link_mappa: pos.link })
+            });
+
+            if (resp.ok) {
+                // FORMATTAZIONE HTML PER TELEGRAM (Previene crash per nomi con caratteri speciali)
+                const linkMappaTesto = pos.link !== "N/A" ? `<a href="${pos.link}">📍 Apri in Maps</a>` : "Posizione disattivata o assente";
+                const testoTelegram = `🚚 <b>Nuovo Aggiornamento Viaggio</b>\n👤 Autista: <code>${nomeAutista}</code>\n📌 Stato: ${val}\n🌍 Posizione: ${linkMappaTesto}`;
+                
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: CHAT_ID, text: testoTelegram, parse_mode: 'HTML', disable_web_page_preview: false })
+                });
+
+                showMsg(t.msgSuccess, "green"); document.getElementById('formStato').reset();
+            } else { showMsg(t.msgError, "red"); }
+        } catch(err) { showMsg(t.msgError, "red"); }
+    };
+
+    document.getElementById('formDocumenti').onsubmit = async (e) => {
+        e.preventDefault();
+        const t = translations[currentLang];
+        const file = document.getElementById('fileInput').files[0];
+        if(!file) return;
+
+        const nomeAutista = userData.name || userData.email || "Autista Sconosciuto";
+        showMsg(t.msgGPS, "blue");
+        const pos = await ottieniPosizione();
+        
+        const pbFormData = new FormData();
+        pbFormData.append('autista', nomeAutista); pbFormData.append('foto_foglio', file);
+        pbFormData.append('orario_locale', getOrarioItaliano()); pbFormData.append('posizione_gps', pos.testo); pbFormData.append('link_mappa', pos.link); 
+
+        try {
+            showMsg(t.msgSaving, "orange");
+            // 1. Salva su PocketBase
+            const resp = await fetch(`${PB_URL}/api/collections/fogli_viaggio/records`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${userToken}` }, body: pbFormData
+            });
+
+            if (resp.ok) {
+                // 2. INVIA IL FILE DIRETTAMENTE A TELEGRAM (Evita problemi di Link URL inaccessibili)
+                const linkMappaTesto = pos.link !== "N/A" ? `<a href="${pos.link}">📍 Apri in Maps</a>` : "Posizione disattivata o assente";
+                const captionTesto = `📄 <b>Nuovo Documento Viaggio</b>\n👤 Autista: <code>${nomeAutista}</code>\n🌍 Posizione: ${linkMappaTesto}`;
+                
+                const isImage = file.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                const telegramMethod = isImage ? 'sendPhoto' : 'sendDocument';
+                const fieldName = isImage ? 'photo' : 'document';
+
+                const telegramFormData = new FormData();
+                telegramFormData.append('chat_id', CHAT_ID);
+                telegramFormData.append('caption', captionTesto);
+                telegramFormData.append('parse_mode', 'HTML');
+                telegramFormData.append(fieldName, file); // Manda il file locale, sicuro al 100%
+
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${telegramMethod}`, {
+                    method: 'POST', body: telegramFormData
+                });
+                
+                showMsg(t.msgSuccess, "green"); document.getElementById('formDocumenti').reset(); document.getElementById('t-no-file').innerText = t.noFile;
+            } else { showMsg(t.msgError, "red"); }
+        } catch(err) { showMsg(t.msgError, "red"); }
+    };
+
+    // FUNZIONE CARICAMENTO CRONOLOGIA AUTISTA
+    async function caricaCronologia() {
+        const t = translations[currentLang];
+        const container = document.getElementById('listaCronologia');
+        container.innerHTML = `<div style="text-align:center; padding: 20px;">${t.loading}</div>`;
+        
+        const nomeAutista = userData.name || userData.email || "Autista Sconosciuto";
+        // Codifica in modo robusto il filtro, evitando problemi se ci sono apostrofi nel nome
+        const nomeSicuro = nomeAutista.replace(/'/g, "\\'");
+        const filter = encodeURIComponent(`autista='${nomeSicuro}'`);
+        
+        try {
+            const resStati = await fetch(`${PB_URL}/api/collections/stati_viaggio/records?filter=${filter}&sort=-created&perPage=10`, {
+                headers: { 'Authorization': `Bearer ${userToken}` }
+            });
+            const resDocs = await fetch(`${PB_URL}/api/collections/fogli_viaggio/records?filter=${filter}&sort=-created&perPage=10`, {
+                headers: { 'Authorization': `Bearer ${userToken}` }
+            });
+
+            // Se l'errore è 403, avvisa che mancano i permessi di lettura
+            if(resStati.status === 403 || resDocs.status === 403) {
+                container.innerHTML = `<div style="text-align:center; color:#991b1b; padding: 10px; background:#fee2e2; border-radius:8px;">⚠️ Errore permessi. Chiedi all'admin di sbloccare la lettura in PocketBase (List/View API Rules).</div>`;
+                return;
+            }
+
+            if(!resStati.ok || !resDocs.ok) throw new Error("API Error");
+
+            const dataStati = await resStati.json();
+            const dataDocs = await resDocs.json();
+
+            let combinati = [];
+            dataStati.items.forEach(i => combinati.push({...i, type: 'stato'}));
+            dataDocs.items.forEach(i => combinati.push({...i, type: 'doc'}));
+
+            combinati.sort((a,b) => new Date(b.created) - new Date(a.created));
+
+            container.innerHTML = '';
+            if(combinati.length === 0) {
+                container.innerHTML = `<div style="text-align:center; color:#64748b; padding: 10px;">${t.noData}</div>`;
+                return;
+            }
+
+            combinati.slice(0, 15).forEach(item => { 
+                const div = document.createElement('div');
+                div.className = `history-item ${item.type}`;
+                
+                let testoSmostrato = item.stato;
+                if(item.type === 'stato') {
+                    const optn = t.options.find(o => o.v === item.stato);
+                    if(optn) testoSmostrato = optn.t;
+                }
+
+                let content = `<div class="history-date">${item.orario_locale || new Date(item.created).toLocaleString(currentLang==='it'?'it-IT':'ar-MA')}</div>`;
+                
+                if(item.type === 'stato') {
+                    content += `<div><strong>${t.lblState}</strong> ${testoSmostrato}</div>`;
+                } else {
+                    const fileUrl = `${PB_URL}/api/files/fogli_viaggio/${item.id}/${item.foto_foglio}`;
+                    content += `<div><strong>📄 ${t.lblDoc}</strong></div>`;
+                    content += `<a href="${fileUrl}" target="_blank" class="history-link">${t.openDoc}</a>`;
+                }
+                div.innerHTML = content;
+                container.appendChild(div);
+            });
+        } catch(e) {
+            container.innerHTML = `<div style="text-align:center; color:red; padding: 10px;">${t.msgError}</div>`;
+        }
+    }
+</script>
+</body>
+</html>
