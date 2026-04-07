@@ -27,7 +27,7 @@ Since the frontend is completely decoupled, you can run this app locally in just
 1. Download the latest version of [PocketBase](https://pocketbase.io/).
 2. Clone this repository into the `pb_public` directory of your PocketBase installation:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/pwatruckpocket.git pb_public
+   git clone https://github.com/Student13Thirteen/pwatruckpocket.git pb_public
    ```
 3. Start the PocketBase server:
    ```bash
