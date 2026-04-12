@@ -7,7 +7,7 @@ An offline-first Progressive Web Application (PWA) built to digitize and automat
 
 ## ✨ Key Features
 
-- **📱 PWA & Offline-Ready:** Fully installable on iOS/Android devices. Uses Service Workers (`sw.js`) to cache assets and allow the app to load even in dead zones.
+- **📱 PWA:** Fully installable on iOS/Android devices
 - **🔐 Secure Authentication:** Built-in user login leveraging PocketBase's auth store.
 - **📄 Document Uploads:** Drivers can directly upload trip logs, delivery notes, and PDF files from their smartphones.
 - **🤖 Telegram Automation:** Whenever a new trip log is submitted, the app automatically triggers a Telegram Bot to send a real-time push notification to the dispatch group chat.
