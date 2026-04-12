@@ -1,10 +1,6 @@
 # Secrets — never commit these
 .env
 
-# Nextcloud and database data
-html/
-database/
-
 # Mac/Windows junk
 .DS_Store
 Thumbs.db
