@@ -92,7 +92,7 @@ Navigate to `https://yourdomain.com/_/` to complete PocketBase admin setup.
 
 The Telegram notification is triggered from a **PocketBase Hook** (`pb_hooks/`), not from the frontend. This keeps your Bot Token server-side and never exposed in the browser source.
 
-Create `pb_hooks/notify.js`:
+Create `pb_hooks/telegram.js`:
 ```javascript
 onRecordAfterCreateRequest((e) => {
     const BOT_TOKEN = $os.getenv("TELEGRAM_BOT_TOKEN");
