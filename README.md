@@ -1,449 +1,587 @@
 # 🚚 Fleet Driver Management PWA
 
-A Progressive Web App for fleet management. Built with **PocketBase**, featuring automated Telegram alerts and bilingual support.
+A Progressive Web App for fleet driver management, built with **PocketBase**, **Vanilla HTML/CSS/JavaScript**, **Cloudflare Tunnel**, and **Telegram notifications**.
+
+This project is designed for transport companies whose drivers use mobile networks that may be unstable or slow. The app allows drivers to send trip status updates and upload trip documents while keeping data stored in PocketBase and sending office notifications through Telegram.
+
+---
 
 ## ✨ Key Features
 
-- **📱 PWA:** Fully installable on iOS/Android — works offline
-- **🔐 Secure Authentication:** Built-in user login via PocketBase's auth store
-- **📄 Document Uploads:** Drivers can upload trip logs, delivery notes, and PDFs directly from their smartphones
-- **🤖 Telegram Automation:** Every new trip log submission triggers a Telegram Bot notification to the dispatch group chat
-- **⚡ Lightweight Backend:** PocketBase (SQLite + Go) — zero complex server configuration
-- **🌍 Bilingual Support:** Dual language interface
+- **📱 Progressive Web App**  
+  Installable on Android and iOS as a mobile app.
+
+- **🔐 Driver Authentication**  
+  Drivers log in through PocketBase authentication.
+
+- **📍 Trip Status Updates**  
+  Drivers can send real-time trip statuses with timestamp and GPS position.
+
+- **📄 Document Uploads**  
+  Drivers can upload photos, PDFs, delivery notes, trip sheets, and other travel documents.
+
+- **📥 Offline Queue**  
+  If the connection is weak or unavailable, submissions are saved locally and retried later.
+
+- **🧩 Image Compression**  
+  Images are compressed before upload to improve performance on mobile networks.
+
+- **🤖 Telegram Notifications**  
+  Telegram alerts are sent from PocketBase hooks, not from the frontend.
+
+- **🌍 Bilingual Interface**  
+  Italian and Arabic interface for drivers.
+
+- **☁️ Cloudflare Tunnel**  
+  Public access without router port forwarding.
+
+---
 
 ## 🏗️ Architecture
 
-```
-Internet → Cloudflare Edge → cloudflared (tunnel) → pocketbase:8090
-                                                      (no exposed router ports)
+```text
+Driver phone
+   ↓
+PWA frontend
+   ↓
+PocketBase API
+   ↓
+PocketBase hook
+   ↓
+telegram_queue collection
+   ↓
+Telegram group notification
 ```
 
-- **Frontend:** Pure HTML5, Vanilla JS, CSS3 served directly by PocketBase from `pb_public/`
-- **Backend:** PocketBase handles auth, database, file storage, and hooks
-- **Tunnel:** Cloudflare Zero Trust — no open firewall ports, built-in SSL
+Network path:
+
+```text
+Internet → Cloudflare Edge → cloudflared tunnel → PocketBase container:8090
+```
+
+The frontend only communicates with PocketBase.
+
+Telegram is handled server-side by PocketBase hooks. This keeps the Telegram Bot Token outside the browser and avoids making the driver wait for Telegram delivery.
+
+---
 
 ## 📁 Repository Structure
 
-```
+```text
 pwatruckpocket/
-├── index.html
-├── manifest.json
-├── sw.js                   # Service Worker (offline support)
-├── docker-compose.yml
 ├── cloudflared/
-│   └── config.yml          # Tunnel keepalive settings
+│   └── config.yml
+├── icons/
+│   ├── icon-192.png
+│   └── icon-512.png
+├── pb_hooks/
+│   └── telegram.pb.js
 ├── .env.example
 ├── .gitignore
-└── README.md
+├── LICENSE
+├── README.md
+├── docker-compose.yml
+├── index.html
+├── manifest.json
+└── sw.js
 ```
 
-## 🚀 Quick Start
+---
 
-### Prerequisites
+## ⚠️ Important Before Deployment
 
-- Docker and Docker Compose installed
-- A domain managed via Cloudflare
-- A Cloudflare Zero Trust account (free tier)
-- A Telegram Bot token (from [@BotFather](https://t.me/botfather))
+Before deploying, replace this placeholder inside `index.html`:
 
-### Local Development (no Docker)
-
-1. Download the latest [PocketBase binary](https://pocketbase.io/docs/)
-2. Clone this repo into the `pb_public` folder:
-   ```bash
-   git clone https://github.com/Student13Thirteen/pwatruckpocket.git pb_public
-   ```
-3. Start PocketBase:
-   ```bash
-   ./pocketbase serve
-   ```
-4. Open `http://127.0.0.1:8090`
-
-### Production Deployment (Docker + Cloudflare Tunnel)
-
-**1. Clone the repository:**
-```bash
-git clone https://github.com/Student13Thirteen/pwatruckpocket.git
-cd pwatruckpocket
+```js
+const PB_URL = 'INSERT_URL_HERE';
 ```
 
-**2. Create your environment file:**
+with your public PocketBase URL:
+
+```js
+const PB_URL = 'https://your-domain.example.com';
+```
+
+Do not commit real credentials or runtime data:
+
+```text
+.env
+pb_data/
+Telegram Bot Token
+Cloudflare Tunnel Token
+database files
+backup archives
+```
+
+---
+
+## 🚀 Requirements
+
+You need:
+
+- Docker
+- Docker Compose
+- A domain managed by Cloudflare
+- A Cloudflare Zero Trust Tunnel
+- A Telegram Bot Token from BotFather
+- A Telegram chat ID for the dispatch/group chat
+
+---
+
+## ⚙️ Environment Variables
+
+Create a `.env` file from `.env.example`:
+
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-**3. Set up the Cloudflare Tunnel:**
-- Go to Cloudflare Zero Trust Dashboard → Networks → Tunnels
-- Create a new tunnel and route it to `http://pocketbase-app:8090`
-- Copy your tunnel **token** and **ID**
-- Paste the token into `.env` and the ID into `cloudflared/config.yml`
+Example `.env`:
 
-**4. Deploy:**
+```env
+PUBLIC_BASE_URL=https://your-domain.example.com
+
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_CHAT_ID=your_telegram_chat_id_here
+
+CLOUDFLARE_TOKEN=your_cloudflare_tunnel_token_here
+```
+
+Explanation:
+
+| Variable | Description |
+|---|---|
+| `PUBLIC_BASE_URL` | Public URL used by drivers and by Telegram file links |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `TELEGRAM_CHAT_ID` | Telegram chat or group ID |
+| `CLOUDFLARE_TOKEN` | Cloudflare Tunnel token |
+
+Never commit the real `.env` file.
+
+---
+
+## 🐳 Docker Deployment
+
+Start the stack:
+
 ```bash
 docker compose up -d
 ```
 
-**5. First access:**
-
-Navigate to `https://yourdomain.com/_/` to complete PocketBase admin setup.
-
-## ⚙️ Telegram Integration
-
-The Telegram notification is triggered from a **PocketBase Hook** (`pb_hooks/`), not from the frontend. This keeps your Bot Token server-side and never exposed in the browser source.
-
-Create `pb_hooks/telegram.pb.js`:
-```javascript
-// pb_hooks/telegram.pb.js
-// Netfleet Autisti - Telegram queue stabile senza funzioni globali
-
-console.log("[telegram] telegram.pb.js caricato - versione autosufficiente v2");
-
-onRecordAfterCreateSuccess(function (e) {
-    e.next();
-
-    try {
-        var TELEGRAM_QUEUE_COLLECTION = "telegram_queue";
-
-        function escapeHtml(value) {
-            return String(value || "").replace(/[&<>'"]/g, function (c) {
-                var map = {
-                    "&": "&amp;",
-                    "<": "&lt;",
-                    ">": "&gt;",
-                    "'": "&#39;",
-                    "\"": "&quot;"
-                };
-                return map[c];
-            });
-        }
-
-        function mapLinkHtml(record) {
-            var link = String(record.get("link_mappa") || "");
-            var gps = String(record.get("posizione_gps") || "");
-
-            if (link.indexOf("https://www.google.com/maps?q=") === 0 || link.indexOf("https://maps.google.") === 0) {
-                return "<a href=\"" + escapeHtml(link) + "\">Apri in Maps</a>";
-            }
-
-            if (gps) {
-                return escapeHtml(gps);
-            }
-
-            return "N/D";
-        }
-
-        var payload = {
-            kind: "stato",
-            collection: "stati_viaggio",
-            recordId: e.record.id,
-            text:
-                "Nuovo Aggiornamento Viaggio\n" +
-                "Autista: <code>" + escapeHtml(e.record.get("autista") || "Sconosciuto") + "</code>\n" +
-                "Stato: " + escapeHtml(e.record.get("stato") || "Non specificato") + "\n" +
-                "Orario: " + escapeHtml(e.record.get("orario_locale") || "N/D") + "\n" +
-                "Posizione: " + mapLinkHtml(e.record)
-        };
-
-        var collection = $app.findCollectionByNameOrId(TELEGRAM_QUEUE_COLLECTION);
-        var queueRecord = new Record(collection);
-
-        queueRecord.set("type", "stato");
-        queueRecord.set("payload_json", JSON.stringify(payload));
-        queueRecord.set("status", "pending");
-        queueRecord.set("attempts", 0);
-        queueRecord.set("last_error", "");
-
-        $app.save(queueRecord);
-
-        console.log("[telegram] Notifica stato aggiunta in coda:", e.record.id);
-    } catch (err) {
-        console.error("[telegram] Errore hook stati_viaggio:", err);
-    }
-}, "stati_viaggio");
-
-
-onRecordAfterCreateSuccess(function (e) {
-    e.next();
-
-    try {
-        var TELEGRAM_QUEUE_COLLECTION = "telegram_queue";
-
-        function escapeHtml(value) {
-            return String(value || "").replace(/[&<>'"]/g, function (c) {
-                var map = {
-                    "&": "&amp;",
-                    "<": "&lt;",
-                    ">": "&gt;",
-                    "'": "&#39;",
-                    "\"": "&quot;"
-                };
-                return map[c];
-            });
-        }
-
-        function firstFileName(value) {
-            if (!value) return "";
-            if (Array.isArray(value)) {
-                return value.length > 0 ? String(value[0]) : "";
-            }
-            return String(value);
-        }
-
-        function mapLinkHtml(record) {
-            var link = String(record.get("link_mappa") || "");
-            var gps = String(record.get("posizione_gps") || "");
-
-            if (link.indexOf("https://www.google.com/maps?q=") === 0 || link.indexOf("https://maps.google.") === 0) {
-                return "<a href=\"" + escapeHtml(link) + "\">Apri in Maps</a>";
-            }
-
-            if (gps) {
-                return escapeHtml(gps);
-            }
-
-            return "N/D";
-        }
-
-        var fileName = firstFileName(e.record.get("foto_foglio"));
-
-        if (!fileName) {
-            console.log("[telegram] Documento senza file, notifica saltata:", e.record.id);
-            return;
-        }
-
-        var payload = {
-            kind: "documento",
-            collection: "fogli_viaggio",
-            recordId: e.record.id,
-            fileName: fileName,
-            caption:
-                "Nuovo Documento Viaggio\n" +
-                "Autista: <code>" + escapeHtml(e.record.get("autista") || "Sconosciuto") + "</code>\n" +
-                "Orario: " + escapeHtml(e.record.get("orario_locale") || "N/D") + "\n" +
-                "Posizione: " + mapLinkHtml(e.record)
-        };
-
-        var collection = $app.findCollectionByNameOrId(TELEGRAM_QUEUE_COLLECTION);
-        var queueRecord = new Record(collection);
-
-        queueRecord.set("type", "documento");
-        queueRecord.set("payload_json", JSON.stringify(payload));
-        queueRecord.set("status", "pending");
-        queueRecord.set("attempts", 0);
-        queueRecord.set("last_error", "");
-
-        $app.save(queueRecord);
-
-        console.log("[telegram] Notifica documento aggiunta in coda:", e.record.id);
-    } catch (err) {
-        console.error("[telegram] Errore hook fogli_viaggio:", err);
-    }
-}, "fogli_viaggio");
-
-
-cronAdd("telegram_queue_worker", "* * * * *", function () {
-    var TELEGRAM_QUEUE_COLLECTION = "telegram_queue";
-    var PUBLIC_BASE_URL = $os.getenv("PUBLIC_BASE_URL") || "INSERT_URL_HERE";
-    var TELEGRAM_BOT_TOKEN = $os.getenv("TELEGRAM_BOT_TOKEN") || "BOT_TOKEN";
-    var TELEGRAM_CHAT_ID = $os.getenv("TELEGRAM_CHAT_ID") || "CHAT_ID";
-    var MAX_ATTEMPTS = 8;
-
-    function isTelegramConfigured() {
-        return TELEGRAM_BOT_TOKEN &&
-            TELEGRAM_BOT_TOKEN !== "INSERISCI_QUI_IL_TOKEN_TELEGRAM" &&
-            TELEGRAM_CHAT_ID;
-    }
-
-    function firstFileName(value) {
-        if (!value) return "";
-        if (Array.isArray(value)) {
-            return value.length > 0 ? String(value[0]) : "";
-        }
-        return String(value);
-    }
-
-    function makeFileUrl(record, fileName) {
-        var base = PUBLIC_BASE_URL.replace(/\/$/, "");
-        return base + "/api/files/" + record.collection().id + "/" + record.id + "/" + encodeURIComponent(fileName);
-    }
-
-    function sendTelegramJson(method, body) {
-        if (!isTelegramConfigured()) {
-            throw new Error("Telegram non configurato: inserisci TELEGRAM_BOT_TOKEN nel file o nelle variabili ambiente.");
-        }
-
-        var res = $http.send({
-            url: "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/" + method,
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(body),
-            timeout: 60
-        });
-
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-            throw new Error("Telegram HTTP " + res.statusCode + ": " + String(res.raw || res.body || "").slice(0, 500));
-        }
-
-        return res;
-    }
-
-    function sendStatus(payload) {
-        return sendTelegramJson("sendMessage", {
-            chat_id: TELEGRAM_CHAT_ID,
-            text: payload.text,
-            parse_mode: "HTML",
-            disable_web_page_preview: false
-        });
-    }
-
-    function sendDocument(payload) {
-        var record = $app.findRecordById(payload.collection, payload.recordId);
-        var fileName = firstFileName(payload.fileName || record.get("foto_foglio"));
-
-        if (!fileName) {
-            return sendTelegramJson("sendMessage", {
-                chat_id: TELEGRAM_CHAT_ID,
-                text: payload.caption + "\n\nFile non trovato nel record PocketBase.",
-                parse_mode: "HTML",
-                disable_web_page_preview: false
-            });
-        }
-
-        var fileUrl = makeFileUrl(record, fileName);
-        var lower = fileName.toLowerCase();
-
-        var isImage =
-            lower.indexOf(".jpg") > -1 ||
-            lower.indexOf(".jpeg") > -1 ||
-            lower.indexOf(".png") > -1 ||
-            lower.indexOf(".webp") > -1 ||
-            lower.indexOf(".gif") > -1;
-
-        var method = isImage ? "sendPhoto" : "sendDocument";
-        var fieldName = isImage ? "photo" : "document";
-
-        var body = {
-            chat_id: TELEGRAM_CHAT_ID,
-            caption: payload.caption,
-            parse_mode: "HTML"
-        };
-
-        body[fieldName] = fileUrl;
-
-        return sendTelegramJson(method, body);
-    }
-
-    function sendTelegramPayload(payload) {
-        if (payload.kind === "stato") {
-            return sendStatus(payload);
-        }
-
-        if (payload.kind === "documento") {
-            return sendDocument(payload);
-        }
-
-        throw new Error("Tipo payload sconosciuto: " + payload.kind);
-    }
-
-    var queue = [];
-
-    try {
-        queue = $app.findRecordsByFilter(
-            TELEGRAM_QUEUE_COLLECTION,
-            "status = 'pending' || status = 'retry'",
-            "created",
-            5,
-            0
-        );
-    } catch (err) {
-        console.error("[telegram] Cron non attivo o telegram_queue non leggibile:", err);
-        return;
-    }
-
-    for (var i = 0; i < queue.length; i++) {
-        var item = queue[i];
-        var attempts = Number(item.get("attempts") || 0);
-
-        try {
-            var payload = JSON.parse(String(item.get("payload_json") || "{}"));
-
-            sendTelegramPayload(payload);
-
-            $app.delete(item);
-
-            console.log("[telegram] Notifica inviata e rimossa dalla coda:", payload.kind, payload.recordId);
-        } catch (err) {
-            var nextAttempts = attempts + 1;
-
-            item.set("attempts", nextAttempts);
-            item.set("last_error", String(err).slice(0, 1000));
-            item.set("status", nextAttempts >= MAX_ATTEMPTS ? "error" : "retry");
-
-            $app.save(item);
-
-            console.error("[telegram] Invio Telegram fallito. Tentativo:", nextAttempts, "id coda:", item.id, err);
-        }
-    }
-});
-```
-
-Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to your `.env` — PocketBase picks them up automatically.
-
-## 🔧 Useful Commands
+View logs:
 
 ```bash
-# View live logs
 docker compose logs -f
-
-# Restart PocketBase
-docker restart pocketbase-app
-
-# Backup data
-tar -czf backup_pb_$(date +%Y%m%d).tar.gz ./pb_data
 ```
+
+View only recent logs:
+
+```bash
+docker compose logs --tail=80 -f
+```
+
+Restart all containers:
+
+```bash
+docker compose restart
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Check running containers:
+
+```bash
+docker compose ps
+```
+
+---
+
+## ☁️ Cloudflare Tunnel
+
+The app is exposed through `cloudflared`, without opening router ports.
+
+Recommended route:
+
+```text
+https://your-domain.example.com → http://pocketbase:8090
+```
+
+The Cloudflare tunnel token must be stored in `.env`:
+
+```env
+CLOUDFLARE_TOKEN=your_cloudflare_tunnel_token_here
+```
+
+The tunnel configuration lives in:
+
+```text
+cloudflared/config.yml
+```
+
+---
+
+## 🧱 PocketBase Collections
+
+The app expects these PocketBase collections:
+
+```text
+users
+stati_viaggio
+fogli_viaggio
+telegram_queue
+```
+
+---
+
+## 📍 Collection: `stati_viaggio`
+
+This collection stores trip status updates.
+
+Required fields:
+
+```text
+autista          text
+stato            text
+orario_locale    text
+posizione_gps    text
+link_mappa       url
+```
+
+Recommended API rules depend on your setup, but authenticated drivers must be able to create records.
+
+---
+
+## 📄 Collection: `fogli_viaggio`
+
+This collection stores uploaded trip documents.
+
+Required fields:
+
+```text
+autista          text
+foto_foglio      file
+orario_locale    text
+posizione_gps    text
+link_mappa       url
+```
+
+Authenticated drivers must be able to create records.
+
+---
+
+## 📬 Collection: `telegram_queue`
+
+Create a base collection named:
+
+```text
+telegram_queue
+```
+
+Required fields:
+
+```text
+type          text      required
+payload_json  text      required
+status        text      required
+attempts      number    default 0, no decimals
+last_error    text
+```
+
+Recommended API rules:
+
+```text
+List/Search rule: Superusers only
+View rule:        Superusers only
+Create rule:      Superusers only
+Update rule:      Superusers only
+Delete rule:      Superusers only
+```
+
+Drivers should not access this collection directly.
+
+---
+
+## 🤖 Telegram Integration
+
+Telegram notifications are handled by:
+
+```text
+pb_hooks/telegram.pb.js
+```
+
+The frontend does not contain the Telegram bot token.
+
+The flow is:
+
+```text
+Driver submits status/document
+        ↓
+PocketBase saves record
+        ↓
+PocketBase hook creates telegram_queue record
+        ↓
+Cron worker sends Telegram notification
+        ↓
+Queue record is deleted after successful delivery
+```
+
+If Telegram fails, the queue record remains in `telegram_queue` with:
+
+```text
+status
+attempts
+last_error
+```
+
+This makes delivery more reliable and avoids blocking the driver app when Telegram is slow or unavailable.
+
+---
+
+## 📱 PWA Behavior
+
+The app includes:
+
+```text
+manifest.json
+sw.js
+icons/
+```
+
+The service worker caches static frontend files only.
+
+PocketBase API requests, login, uploads, and files are not cached by the service worker.
+
+When you make major frontend changes, update the cache version inside `sw.js`, for example:
+
+```js
+const CACHE_NAME = 'netfleet-autisti-v5';
+```
+
+This helps installed phones receive the new version.
+
+---
+
+## 📥 Offline Queue
+
+The frontend uses IndexedDB to store pending requests when the connection is unstable.
+
+If the driver has weak or missing connection:
+
+- status updates are saved locally
+- documents are saved locally
+- the app retries when the connection comes back
+- the driver can manually press the queue sync button
+
+This improves reliability on mobile networks.
+
+---
+
+## 🧩 Image Compression
+
+Images are compressed before upload to reduce mobile data usage and upload time.
+
+Default frontend settings:
+
+```js
+const IMAGE_MAX_SIDE = 1600;
+const IMAGE_JPEG_QUALITY = 0.72;
+```
+
+You can lower these values if drivers often work with very weak connections.
+
+---
+
+## 🔐 Security Notes
+
+Do not commit:
+
+```text
+.env
+pb_data/
+real Telegram Bot Token
+real Telegram Chat ID, if you want to keep it private
+real Cloudflare Tunnel Token
+database files
+backup archives
+```
+
+Telegram credentials must stay server-side through environment variables:
+
+```env
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+```
+
+The frontend must never contain:
+
+```text
+Telegram Bot Token
+Cloudflare Tunnel Token
+PocketBase admin credentials
+```
+
+---
 
 ## 💾 Backup
 
+Before changing production files, back up PocketBase data:
+
 ```bash
-# Stop the container
-docker stop pocketbase-app
+docker compose stop
 
-# Archive all data (database + uploads)
-tar -czf backup_pb_$(date +%Y%m%d).tar.gz ./pb_data
+tar -czf backup_pb_$(date +%Y%m%d_%H%M).tar.gz ./pb_data ./pb_hooks ./pb_public
 
-# Restart
-docker start pocketbase-app
+docker compose start
 ```
 
-Then download the archive via SCP using your **local IP**, not the Cloudflare tunnel, for large files.
+For large backups, download them with SCP over the local network instead of through the Cloudflare tunnel.
 
-## 🛡️ Security Notes
+Example:
 
-- **Never commit `.env`** — it contains your Telegram credentials and Cloudflare token
-- Keep Telegram credentials in `.env` and read them via PocketBase hooks — never hardcode them in frontend JS
-- The Cloudflare tunnel token grants access to your tunnel — treat it like a private key
+```bash
+scp user@server-local-ip:/path/to/backup_pb_YYYYMMDD_HHMM.tar.gz .
+```
+
+---
+
+## 🔧 Useful Commands
+
+View live logs:
+
+```bash
+docker compose logs -f
+```
+
+View recent logs:
+
+```bash
+docker compose logs --tail=80 -f
+```
+
+Restart everything:
+
+```bash
+docker compose restart
+```
+
+Restart only PocketBase:
+
+```bash
+docker compose restart pocketbase
+```
+
+Check containers:
+
+```bash
+docker compose ps
+```
+
+Stop containers:
+
+```bash
+docker compose down
+```
+
+Start containers:
+
+```bash
+docker compose up -d
+```
+
+---
+
+## ✅ Production Checklist
+
+Before going live:
+
+- [ ] Replace `INSERT_URL_HERE` in `index.html`
+- [ ] Create `.env` from `.env.example`
+- [ ] Set `PUBLIC_BASE_URL`
+- [ ] Set `TELEGRAM_BOT_TOKEN`
+- [ ] Set `TELEGRAM_CHAT_ID`
+- [ ] Set `CLOUDFLARE_TOKEN`
+- [ ] Add `pb_hooks/telegram.pb.js`
+- [ ] Add PWA icons in `icons/`
+- [ ] Create PocketBase collections
+- [ ] Create `telegram_queue`
+- [ ] Check API rules
+- [ ] Run `docker compose up -d`
+- [ ] Test login
+- [ ] Test status update
+- [ ] Test document upload
+- [ ] Check Telegram notification
+- [ ] Check that `telegram_queue` is emptied after successful delivery
+
+---
+
+## 🧪 Testing
+
+### Test status update
+
+1. Log in as a driver
+2. Send a trip status
+3. Check `stati_viaggio`
+4. Check `telegram_queue`
+5. Confirm Telegram notification arrives
+
+### Test document upload
+
+1. Log in as a driver
+2. Upload a photo or PDF
+3. Check `fogli_viaggio`
+4. Confirm the file is saved
+5. Confirm Telegram notification arrives
+
+### Test offline behavior
+
+1. Open the app
+2. Disable mobile data or Wi-Fi
+3. Send a status or document
+4. Confirm the app saves it in the queue
+5. Re-enable connection
+6. Confirm the queue is sent automatically
+
+---
 
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | HTML5, Vanilla JS, CSS3 |
-| PWA | Web App Manifest, Service Workers |
-| Backend | [PocketBase](https://pocketbase.io/) |
-| Database | SQLite (bundled with PocketBase) |
-| Tunnel | Cloudflare Zero Trust (`cloudflared`) |
+| Frontend | HTML5, Vanilla JavaScript, CSS3 |
+| PWA | Web App Manifest, Service Worker, IndexedDB |
+| Backend | PocketBase |
+| Database | SQLite |
+| File Storage | PocketBase file storage |
+| Tunnel | Cloudflare Tunnel |
 | Notifications | Telegram Bot API |
+| Deployment | Docker Compose |
 
-## 📈 Monitoring & Alerts
-This service is actively monitored using a self-hosted **Uptime Kuma** instance. 
-It performs health checks every 5 minutes and sends real-time push notifications via a Telegram Bot in case of downtime. 
+---
 
-For more details on the monitoring infrastructure and setup, check out my dedicated repository:
-👉 **[Homelab Monitoring with Uptime Kuma](https://github.com/Student13Thirteen/uptimemonitoring)**
+## 📈 Monitoring
+
+Recommended monitoring:
+
+- Uptime Kuma
+- Cloudflare tunnel health checks
+- Telegram downtime alerts
+- PocketBase container logs
+
+Basic health check URL:
+
+```text
+https://your-domain.example.com/api/health
+```
+
+---
 
 ## 📝 License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
+
+See the `LICENSE` file for details.
