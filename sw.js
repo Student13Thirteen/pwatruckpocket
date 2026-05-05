@@ -1,5 +1,6 @@
-const CACHE_NAME = 'autisti-app-v2';
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'netfleet-autisti-v4';
+
+const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
@@ -7,37 +8,61 @@ const ASSETS_TO_CACHE = [
   './icons/icon-512.png?v=2'
 ];
 
-// Installazione e cache dei file
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS_TO_CACHE))
+      .then(cache => cache.addAll(APP_SHELL).catch(() => undefined))
+      .then(() => self.skipWaiting())
   );
 });
 
-// Attivazione e pulizia vecchie cache
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
-        keys.filter(key => key !== CACHE_NAME)
+    caches.keys()
+      .then(keys => Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME)
           .map(key => caches.delete(key))
-      );
-    })
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
-// Intercetta le richieste e serve dalla cache se offline
 self.addEventListener('fetch', event => {
-  // Ignoriamo le richieste API verso PocketBase per la cache statica
-  if (event.request.url.includes('/api/')) {
-    return; 
+  const request = event.request;
+  const url = new URL(request.url);
+
+  // Non cacheare API PocketBase, login, upload, file e richieste non GET.
+  if (request.method !== 'GET' || url.pathname.includes('/api/')) {
+    return;
   }
 
+  // HTML: prova prima rete, poi cache.
+  if (request.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('./index.html', clone));
+          return response;
+        })
+        .catch(() => caches.match('./index.html').then(cached => cached || caches.match('./')))
+    );
+    return;
+  }
+
+  // Statici: cache first con aggiornamento silenzioso.
   event.respondWith(
-    caches.match(event.request)
-      .then(cachedResponse => {
-        return cachedResponse || fetch(event.request);
-      })
+    caches.match(request).then(cached => {
+      const networkFetch = fetch(request).then(response => {
+        if (response && response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+        }
+        return response;
+      }).catch(() => cached);
+
+      return cached || networkFetch;
+    })
   );
 });
