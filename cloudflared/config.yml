@@ -1,7 +1,3 @@
-# Cloudflare Tunnel configuration
-# Replace YOUR_TUNNEL_ID with the ID from Zero Trust Dashboard → Tunnels → your tunnel
-
-tunnel: YOUR_TUNNEL_ID
 no-autoupdate: true
 
 originRequest:
