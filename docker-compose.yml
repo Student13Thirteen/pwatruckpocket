@@ -1,40 +1,33 @@
-# -----------------------------------------------------------------------------
-# POCKETBASE + CLOUDFLARE TUNNEL
-# Self-hosted PWA backend — no exposed router ports required.
-# -----------------------------------------------------------------------------
-# Setup: copy .env.example to .env and fill in your credentials before running.
-# -----------------------------------------------------------------------------
-
 services:
-
   pocketbase:
     image: ghcr.io/muchobien/pocketbase:latest
     container_name: pocketbase-app
     restart: unless-stopped
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     volumes:
       - ./pb_data:/pb_data
       - ./pb_hooks:/pb_hooks
       - ./pb_migrations:/pb_migrations
       - ./pb_public:/pb_public
     environment:
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     networks:
       - pwa-net
 
   tunnel:
-    container_name: cloudflared-pwa
     image: cloudflare/cloudflared:latest
-    restart: always
+    container_name: cloudflared-pwa
+    restart: unless-stopped
     depends_on:
       - pocketbase
-    networks:
-      - pwa-net
     volumes:
       - ./cloudflared:/etc/cloudflared
     command: tunnel --config /etc/cloudflared/config.yml run --token ${CLOUDFLARE_TOKEN}
+    networks:
+      - pwa-net
 
 networks:
   pwa-net:
