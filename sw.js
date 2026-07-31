@@ -1,4 +1,4 @@
-const CACHE_NAME = 'netfleet-autisti-v4';
+const CACHE_NAME = 'pwatruckpocket-v5';
 
 const APP_SHELL = [
   './',
@@ -32,12 +32,13 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Non cacheare API PocketBase, login, upload, file e richieste non GET.
+  // Never cache API calls, authentication, uploads or non-GET requests.
   if (request.method !== 'GET' || url.pathname.includes('/api/')) {
     return;
   }
 
-  // HTML: prova prima rete, poi cache.
+  // Navigation: prefer the network so drivers receive the current workflow,
+  // then fall back to the previously cached app shell.
   if (request.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
     event.respondWith(
       fetch(request)
@@ -51,16 +52,18 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Statici: cache first con aggiornamento silenzioso.
+  // Static assets: return cache immediately and refresh silently.
   event.respondWith(
     caches.match(request).then(cached => {
-      const networkFetch = fetch(request).then(response => {
-        if (response && response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
-        }
-        return response;
-      }).catch(() => cached);
+      const networkFetch = fetch(request)
+        .then(response => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => cached);
 
       return cached || networkFetch;
     })
