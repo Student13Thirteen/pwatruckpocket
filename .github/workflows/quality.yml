@@ -11,6 +11,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -18,15 +19,23 @@ jobs:
       - name: Validate public files and security boundary
         run: python3 scripts/validate_public_repo.py
 
-      - name: Check service worker syntax
-        run: node --check sw.js
-
-      - name: Check PocketBase hook syntax
-        run: node --check pb_hooks/telegram.pb.js
-
-      - name: Check inline JavaScript syntax
-        shell: bash
+      - name: Check Bash syntax
         run: |
+          bash -n pwatruckpocket
+          bash -n docker-entrypoint.sh
+          bash -n scripts/ci_smoke.sh
+
+      - name: Run ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck pwatruckpocket docker-entrypoint.sh scripts/ci_smoke.sh
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check sw.js
+          node --check pb_hooks/telegram.pb.js
+          node --check pb_migrations/1753950000_public_demo_schema.js
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -36,3 +45,6 @@ jobs:
           Path('/tmp/pwatruckpocket-inline.js').write_text('\n'.join(scripts), encoding='utf-8')
           PY
           node --check /tmp/pwatruckpocket-inline.js
+
+      - name: Build and smoke-test clean installation
+        run: bash scripts/ci_smoke.sh
