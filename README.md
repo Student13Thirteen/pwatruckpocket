@@ -119,7 +119,7 @@ See [`docs/architecture.md`](docs/architecture.md) for component boundaries, onl
 ```text
 pwatruckpocket/
 |- index.html                 # PWA UI and workflow logic
-|- config.example.js         # public runtime configuration template
+|- config.example.js         # deployment reference; not loaded by the current page
 |- manifest.json             # installable PWA metadata
 |- sw.js                     # app-shell cache; API requests are excluded
 |- pb_hooks/
@@ -134,6 +134,8 @@ pwatruckpocket/
 |  |- runbook.md
 |  |- security.md
 |  `- troubleshooting.md
+|- scripts/
+|  `- validate_public_repo.py
 |- docker-compose.yml
 `- .env.example
 ```
@@ -144,10 +146,11 @@ pwatruckpocket/
 git clone https://github.com/Student13Thirteen/pwatruckpocket.git
 cd pwatruckpocket
 cp .env.example .env
-cp config.example.js config.js
 ```
 
-Set the public PocketBase URL in `config.js`, configure the environment placeholders in `.env`, then start the services:
+Configure the environment placeholders in `.env`. For the current public page, replace the `INSERT_URL_HERE` placeholder in `index.html` with the public PocketBase origin before deployment. `config.example.js` records the intended future runtime-config shape but is not loaded by the current page.
+
+Then start the backend and tunnel services:
 
 ```bash
 docker compose up -d
@@ -178,6 +181,26 @@ The frontend must never contain:
 - the private update manifest or production API origin.
 
 The APK inspected for this review contains production-specific endpoints. For that reason it is evidence of a stable internal release, not a public distributable artifact. See [`docs/security.md`](docs/security.md).
+
+## Automated quality checks
+
+GitHub Actions now validates:
+
+- PWA manifest structure;
+- gross HTML parseability;
+- presence of the offline queue and service-worker registration;
+- absence of direct Telegram API calls in the client;
+- absence of obvious private keys or Telegram tokens;
+- absence of APKs, bundles and signing material;
+- JavaScript syntax for the service worker, PocketBase hook and inline page scripts.
+
+Run the dependency-free repository check locally with:
+
+```bash
+python3 scripts/validate_public_repo.py
+node --check sw.js
+node --check pb_hooks/telegram.pb.js
+```
 
 ## What I can explain and defend
 
