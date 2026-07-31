@@ -6,15 +6,15 @@ This document records what was verified from the supplied stable APK. It deliber
 
 | Property | Verified value |
 |---|---|
-| Artifact type | signed Android APK |
+| Artifact type | Android APK with a signing block |
 | File label | `NETFLEET_STABLE_V_1.0.apk` |
 | Package | `biz.netfleet.autisti` |
 | Version name | `1.0.1` |
-| Version code | `2` |
+| Version code | `3` |
 | Main activity | `biz.netfleet.autisti.MainActivity` |
 | Embedded app shell | `assets/netfleet_index.html` |
 
-The filename says `V_1.0`, while the package metadata identifies version `1.0.1`. The package metadata is used as the release version in this documentation.
+The filename says `V_1.0`, while the package metadata identifies version `1.0.1` with version code `3`. The package metadata is used as the release version in this documentation. The APK signing block was observed, but this review did not attribute or independently verify the signer identity.
 
 ## Verified native capabilities
 
