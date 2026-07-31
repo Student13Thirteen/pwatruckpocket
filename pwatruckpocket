@@ -35,6 +35,7 @@ USAGE
 }
 
 need() { command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"; }
+
 require_docker() {
   need docker
   docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required."
@@ -43,7 +44,12 @@ require_docker() {
 
 random_hex() {
   local bytes="${1:-24}"
-  if command -v openssl >/dev/null 2>&1; then openssl rand -hex "$bytes"; else LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c $((bytes * 2)); printf '\n'; fi
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex "$bytes"
+  else
+    od -An -N "$bytes" -tx1 /dev/urandom | tr -d ' \n'
+    printf '\n'
+  fi
 }
 
 read_default() {
@@ -61,7 +67,9 @@ read_secret() {
 
 env_escape() {
   local value="$1"
-  value=${value//\\/\\\\}; value=${value//\"/\\\"}; value=${value//\$/\\$}
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//\$/\\$}
   printf '%s' "$value"
 }
 
@@ -74,19 +82,26 @@ load_env() {
 }
 
 profile_args() {
-  [[ "${DEPLOYMENT_MODE:-local}" == remote ]] && printf '%s\n' '--profile' 'remote'
+  if [[ "${DEPLOYMENT_MODE:-local}" == remote ]]; then
+    printf '%s\n' '--profile' 'remote'
+  fi
 }
 
 compose() {
   local args=()
-  while IFS= read -r item; do args+=("$item"); done < <(profile_args)
+  while IFS= read -r item; do
+    args+=("$item")
+  done < <(profile_args)
   (cd "$ROOT_DIR" && docker compose "${args[@]}" "$@")
 }
 
 service_state() {
   local service="$1" cid
   cid="$(compose ps -q "$service" 2>/dev/null || true)"
-  [[ -n "$cid" ]] || { printf 'not-created'; return; }
+  if [[ -z "$cid" ]]; then
+    printf 'not-created'
+    return
+  fi
   docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || printf unknown
 }
 
@@ -96,16 +111,26 @@ wait_for_pocketbase() {
   for ((i=1; i<=60; i++)); do
     state="$(service_state pocketbase)"
     case "$state" in
-      healthy) printf '\n'; ok 'PocketBase is healthy.'; return 0 ;;
-      unhealthy|exited|dead) printf '\n'; compose logs --tail=120 pocketbase >&2 || true; die "PocketBase entered state: $state" ;;
+      healthy)
+        printf '\n'
+        ok 'PocketBase is healthy.'
+        return 0
+        ;;
+      unhealthy|exited|dead)
+        printf '\n'
+        compose logs --tail=120 pocketbase >&2 || true
+        die "PocketBase entered state: $state"
+        ;;
     esac
-    printf '.'; sleep 3
+    printf '.'
+    sleep 3
   done
-  printf '\n'; die 'PocketBase did not become healthy in time.'
+  printf '\n'
+  die 'PocketBase did not become healthy in time.'
 }
 
 create_demo_accounts() {
-  local response token create_response
+  local response token create_response http_code
   compose exec -T pocketbase /pb/pocketbase superuser create "$PB_SUPERUSER_EMAIL" "$PB_SUPERUSER_PASSWORD" >/dev/null 2>&1 || true
 
   response="$(curl -fsS "http://127.0.0.1:${PB_PORT}/api/collections/_superusers/auth-with-password" \
@@ -118,10 +143,11 @@ create_demo_accounts() {
     -H "Authorization: $token" \
     -H 'Content-Type: application/json' \
     --data "{\"email\":\"$DEMO_DRIVER_EMAIL\",\"password\":\"$DEMO_DRIVER_PASSWORD\",\"passwordConfirm\":\"$DEMO_DRIVER_PASSWORD\",\"name\":\"$DEMO_DRIVER_NAME\",\"role\":\"driver\",\"language\":\"it\",\"active\":true}")"
-  case "$(printf '%s' "$create_response" | tail -n1)" in
+  http_code="$(printf '%s' "$create_response" | tail -n1)"
+  case "$http_code" in
     200|201) ok 'Demo driver created.' ;;
     400) warn 'Demo driver already exists; keeping the current record.' ;;
-    *) die "Demo driver creation failed: HTTP $(printf '%s' "$create_response" | tail -n1)" ;;
+    *) die "Demo driver creation failed: HTTP $http_code" ;;
   esac
 }
 
@@ -147,7 +173,9 @@ setup() {
   driver_name="$(read_default 'Demo driver name' 'Mario Demo')"
   driver_email="$(read_default 'Demo driver email' 'driver@example.com')"
   port="$(read_default 'Local HTTP port' '8090')"
-  [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1024 && port <= 65535 )) || die 'Port must be between 1024 and 65535.'
+  if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1024 || port > 65535 )); then
+    die 'Port must be between 1024 and 65535.'
+  fi
 
   printf '\nAccess mode:\n  1) local/LAN demo\n  2) Cloudflare Tunnel\n'
   read -r -p 'Choose [1]: ' mode_choice
@@ -195,7 +223,8 @@ TELEGRAM_BOT_TOKEN="$telegram_token"
 TELEGRAM_CHAT_ID="$telegram_chat"
 CLOUDFLARE_TOKEN="$tunnel_token"
 ENV
-  chmod 600 "$ENV_FILE.tmp"; mv "$ENV_FILE.tmp" "$ENV_FILE"
+  chmod 600 "$ENV_FILE.tmp"
+  mv "$ENV_FILE.tmp" "$ENV_FILE"
   load_env
 
   compose config --quiet
@@ -209,12 +238,35 @@ ENV
   printf '\nRun: bash pwatruckpocket doctor && bash pwatruckpocket demo\n'
 }
 
-start() { require_docker; load_env; compose config --quiet; compose up -d --build --remove-orphans; wait_for_pocketbase; ok "Started: $PUBLIC_BASE_URL"; }
-stop() { require_docker; [[ -f "$ENV_FILE" ]] && load_env || true; compose down; ok 'Stopped; pb_data was preserved.'; }
-status() { require_docker; [[ -f "$ENV_FILE" ]] && load_env || true; compose ps; }
+start() {
+  require_docker
+  load_env
+  compose config --quiet
+  compose up -d --build --remove-orphans
+  wait_for_pocketbase
+  ok "Started: $PUBLIC_BASE_URL"
+}
+
+stop() {
+  require_docker
+  if [[ -f "$ENV_FILE" ]]; then
+    load_env
+  fi
+  compose down
+  ok 'Stopped; pb_data was preserved.'
+}
+
+status() {
+  require_docker
+  if [[ -f "$ENV_FILE" ]]; then
+    load_env
+  fi
+  compose ps
+}
 
 logs() {
-  require_docker; load_env
+  require_docker
+  load_env
   local service="${1:-pocketbase}"
   [[ "$service" =~ ^(pocketbase|tunnel)$ ]] || die 'Service must be pocketbase or tunnel.'
   compose logs --tail=180 -f "$service"
@@ -223,26 +275,82 @@ logs() {
 doctor() {
   local failures=0 state auth_code mode
   printf "%bPwaTruckPocket doctor%b\n\n" "$BOLD" "$RESET"
-  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then ok '[ok] Docker Compose v2'; else warn '[fail] Docker Compose v2'; failures=$((failures+1)); fi
-  if docker info >/dev/null 2>&1; then ok '[ok] Docker daemon reachable'; else warn '[fail] Docker daemon unreachable'; failures=$((failures+1)); fi
-  if [[ -f "$ENV_FILE" ]]; then ok '[ok] .env exists'; load_env; else warn '[fail] .env missing'; failures=$((failures+1)); fi
-  if compose config --quiet >/dev/null 2>&1; then ok '[ok] Compose configuration valid'; else warn '[fail] Compose configuration invalid'; failures=$((failures+1)); fi
-  state="$(service_state pocketbase)"
-  [[ "$state" == healthy ]] && ok '[ok] PocketBase healthy' || { warn "[fail] PocketBase: $state"; failures=$((failures+1)); }
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 12 "http://127.0.0.1:${PB_PORT}/api/health" >/dev/null && ok '[ok] health API' || { warn '[fail] health API'; failures=$((failures+1)); }
-    auth_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 "http://127.0.0.1:${PB_PORT}/api/collections/users/auth-with-password" -H 'Content-Type: application/json' --data "{\"identity\":\"$DEMO_DRIVER_EMAIL\",\"password\":\"$DEMO_DRIVER_PASSWORD\"}" || true)"
-    [[ "$auth_code" == 200 ]] && ok '[ok] demo driver login' || { warn "[fail] demo driver login: HTTP $auth_code"; failures=$((failures+1)); }
+
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    ok '[ok] Docker Compose v2'
+  else
+    warn '[fail] Docker Compose v2'
+    failures=$((failures+1))
   fi
+
+  if docker info >/dev/null 2>&1; then
+    ok '[ok] Docker daemon reachable'
+  else
+    warn '[fail] Docker daemon unreachable'
+    failures=$((failures+1))
+  fi
+
+  if [[ -f "$ENV_FILE" ]]; then
+    ok '[ok] .env exists'
+    load_env
+  else
+    warn '[fail] .env missing'
+    failures=$((failures+1))
+  fi
+
+  if compose config --quiet >/dev/null 2>&1; then
+    ok '[ok] Compose configuration valid'
+  else
+    warn '[fail] Compose configuration invalid'
+    failures=$((failures+1))
+  fi
+
+  state="$(service_state pocketbase)"
+  if [[ "$state" == healthy ]]; then
+    ok '[ok] PocketBase healthy'
+  else
+    warn "[fail] PocketBase: $state"
+    failures=$((failures+1))
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    if curl -fsS --max-time 12 "http://127.0.0.1:${PB_PORT}/api/health" >/dev/null; then
+      ok '[ok] health API'
+    else
+      warn '[fail] health API'
+      failures=$((failures+1))
+    fi
+
+    auth_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 "http://127.0.0.1:${PB_PORT}/api/collections/users/auth-with-password" -H 'Content-Type: application/json' --data "{\"identity\":\"$DEMO_DRIVER_EMAIL\",\"password\":\"$DEMO_DRIVER_PASSWORD\"}" || true)"
+    if [[ "$auth_code" == 200 ]]; then
+      ok '[ok] demo driver login'
+    else
+      warn "[fail] demo driver login: HTTP $auth_code"
+      failures=$((failures+1))
+    fi
+  fi
+
   mode="$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%Lp' "$ENV_FILE" 2>/dev/null || printf '?')"
-  [[ "$mode" == 600 ]] && ok '[ok] .env permissions: 600' || warn "[warn] .env permissions: $mode"
-  (( failures == 0 )) && ok 'Doctor completed: no blocking problems found.' || die "Doctor found $failures blocking problem(s)."
+  if [[ "$mode" == 600 ]]; then
+    ok '[ok] .env permissions: 600'
+  else
+    warn "[warn] .env permissions: $mode"
+  fi
+
+  if (( failures == 0 )); then
+    ok 'Doctor completed: no blocking problems found.'
+  else
+    die "Doctor found $failures blocking problem(s)."
+  fi
 }
 
 backup() {
-  require_docker; load_env; mkdir -p "$BACKUP_DIR"
+  require_docker
+  load_env
+  mkdir -p "$BACKUP_DIR"
   local stamp target
-  stamp="$(date +%Y%m%d_%H%M%S)"; target="$BACKUP_DIR/pwatruckpocket-$stamp.tar.gz"
+  stamp="$(date +%Y%m%d_%H%M%S)"
+  target="$BACKUP_DIR/pwatruckpocket-$stamp.tar.gz"
   info 'Stopping PocketBase briefly for a consistent pb_data snapshot...'
   compose stop pocketbase
   trap 'compose start pocketbase >/dev/null 2>&1 || true' EXIT
@@ -253,22 +361,46 @@ backup() {
   ok "Backup created: $target"
 }
 
-update_stack() { require_docker; load_env; backup; compose build --pull pocketbase; compose up -d --remove-orphans; wait_for_pocketbase; ok 'Update completed.'; }
-credentials() { load_env; printf 'URL:      %s\nDriver:   %s\nPassword: %s\nAdmin:    %s\n' "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL" "$DEMO_DRIVER_PASSWORD" "$PB_SUPERUSER_EMAIL"; }
+update_stack() {
+  require_docker
+  load_env
+  backup
+  compose build --pull pocketbase
+  compose up -d --remove-orphans
+  wait_for_pocketbase
+  ok 'Update completed.'
+}
+
+credentials() {
+  load_env
+  printf 'URL:      %s\nDriver:   %s\nPassword: %s\nAdmin:    %s\n' "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL" "$DEMO_DRIVER_PASSWORD" "$PB_SUPERUSER_EMAIL"
+}
 
 demo() {
   load_env
   printf "%bThree-minute demo%b\n\n" "$BOLD" "$RESET"
   printf '1. Open %s\n2. Login as %s\n3. Send a trip status.\n4. Upload a synthetic image or PDF.\n5. Switch the browser offline, send another item, then reconnect and press Sync.\n6. Open History and show only the authenticated driver records.\n' "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL"
-  [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]] && printf '7. Confirm the server-side Telegram notification.\n' || printf '7. Telegram is optional and currently disabled.\n'
+  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+    printf '7. Confirm the server-side Telegram notification.\n'
+  else
+    printf '7. Telegram is optional and currently disabled.\n'
+  fi
 }
 
 main() {
   cd "$ROOT_DIR"
   case "${1:-help}" in
-    setup) setup ;; start|up) start ;; stop|down) stop ;; status|ps) status ;;
-    doctor|check) doctor ;; logs) shift; logs "${1:-pocketbase}" ;; backup) backup ;;
-    update) update_stack ;; demo) demo ;; credentials) credentials ;; help|-h|--help) usage ;;
+    setup) setup ;;
+    start|up) start ;;
+    stop|down) stop ;;
+    status|ps) status ;;
+    doctor|check) doctor ;;
+    logs) shift; logs "${1:-pocketbase}" ;;
+    backup) backup ;;
+    update) update_stack ;;
+    demo) demo ;;
+    credentials) credentials ;;
+    help|-h|--help) usage ;;
     *) usage; die "Unknown command: $1" ;;
   esac
 }
