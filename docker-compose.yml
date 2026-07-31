@@ -1,33 +1,52 @@
+name: pwatruckpocket
+
 services:
   pocketbase:
-    image: ghcr.io/muchobien/pocketbase:latest
-    container_name: pocketbase-app
+    build:
+      context: .
+      args:
+        PB_VERSION: ${PB_VERSION:-0.39.9}
+    image: pwatruckpocket-pocketbase
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8090:8090"
-    volumes:
-      - ./pb_data:/pb_data
-      - ./pb_hooks:/pb_hooks
-      - ./pb_migrations:/pb_migrations
-      - ./pb_public:/pb_public
+    env_file:
+      - .env
     environment:
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      APP_DISPLAY_NAME: ${APP_DISPLAY_NAME}
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY}
+      PB_SUPERUSER_EMAIL: ${PB_SUPERUSER_EMAIL}
+      PB_SUPERUSER_PASSWORD: ${PB_SUPERUSER_PASSWORD}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    ports:
+      - "${PB_BIND_ADDRESS:-127.0.0.1}:${PB_PORT:-8090}:8090"
+    volumes:
+      - pocketbase-data:/pb/pb_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8090/api/health >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     networks:
       - pwa-net
 
   tunnel:
     image: cloudflare/cloudflared:latest
-    container_name: cloudflared-pwa
+    profiles:
+      - remote
     restart: unless-stopped
+    env_file:
+      - .env
     depends_on:
-      - pocketbase
-    volumes:
-      - ./cloudflared:/etc/cloudflared
-    command: tunnel --config /etc/cloudflared/config.yml run --token ${CLOUDFLARE_TOKEN}
+      pocketbase:
+        condition: service_healthy
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TOKEN}
     networks:
       - pwa-net
+
+volumes:
+  pocketbase-data:
 
 networks:
   pwa-net:
