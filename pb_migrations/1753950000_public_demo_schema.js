@@ -109,7 +109,31 @@ migrate((app) => {
     })
     app.save(queue)
   }
+
+  const superuserEmail = $os.getenv("PB_SUPERUSER_EMAIL")
+  const superuserPassword = $os.getenv("PB_SUPERUSER_PASSWORD")
+  if (superuserEmail && superuserPassword) {
+    let record
+    try {
+      record = app.findAuthRecordByEmail("_superusers", superuserEmail)
+    } catch (_) {
+      const superusers = app.findCollectionByNameOrId("_superusers")
+      record = new Record(superusers)
+      record.set("email", superuserEmail)
+    }
+    record.set("password", superuserPassword)
+    app.save(record)
+  }
 }, (app) => {
+  const superuserEmail = $os.getenv("PB_SUPERUSER_EMAIL")
+  if (superuserEmail) {
+    try {
+      app.delete(app.findAuthRecordByEmail("_superusers", superuserEmail))
+    } catch (_) {
+      // Superuser already absent.
+    }
+  }
+
   ;["telegram_queue", "fogli_viaggio", "stati_viaggio", "users"].forEach((name) => {
     try {
       app.delete(app.findCollectionByNameOrId(name))
