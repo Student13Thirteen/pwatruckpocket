@@ -52,7 +52,11 @@ for _ in $(seq 1 80); do
 done
 
 [[ "$healthy" == true ]]
-curl -fsS http://127.0.0.1:18090/ | grep -q 'PwaTruckPocket CI'
+HOME_HTML="$(curl -fsS http://127.0.0.1:18090/)"
+if ! grep -Fq 'PwaTruckPocket CI' <<<"$HOME_HTML"; then
+  printf '\n--- Unexpected home page response ---\n%s\n' "${HOME_HTML:0:1200}" >&2
+  false
+fi
 
 ADMIN_RESPONSE="$(curl -fsS http://127.0.0.1:18090/api/collections/_superusers/auth-with-password \
   -H 'Content-Type: application/json' \
