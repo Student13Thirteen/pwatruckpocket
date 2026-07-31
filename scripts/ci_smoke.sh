@@ -57,7 +57,11 @@ fi
 
 curl -fsS http://127.0.0.1:18090/ | grep -q 'PwaTruckPocket CI'
 
-docker compose exec -T pocketbase /pb/pocketbase superuser create admin@example.com CI_admin_password_1234 >/dev/null
+docker compose exec -T pocketbase /pb/pocketbase superuser create \
+  admin@example.com \
+  CI_admin_password_1234 \
+  --dir=/pb/pb_data \
+  --encryptionEnv=PB_ENCRYPTION_KEY >/dev/null
 
 ADMIN_RESPONSE="$(curl -fsS http://127.0.0.1:18090/api/collections/_superusers/auth-with-password \
   -H 'Content-Type: application/json' \
