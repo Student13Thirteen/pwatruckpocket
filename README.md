@@ -240,7 +240,6 @@ The contribution represented here is the workflow design, deployment, configurat
 
 ## Related projects
 
-- [NFRP](https://github.com/Student13Thirteen) — broader operations and document-processing work, currently being prepared as a sanitised portfolio edition;
 - [DockNextFlare](https://github.com/Student13Thirteen/docknextflare) — self-hosted private cloud architecture;
 - [UptimeMonitoring](https://github.com/Student13Thirteen/uptimemonitoring) — service monitoring and Telegram alerting.
 
