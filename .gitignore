@@ -1,7 +1,8 @@
-# Secrets
+# Secrets and deployment-specific frontend configuration
 .env
 .env.*
 !.env.example
+config.js
 
 # PocketBase data and local runtime files
 pb_data/
@@ -12,7 +13,14 @@ pb_migrations/
 *.sqlite
 *.sqlite3
 
-# Backups
+# Private Android release material
+*.apk
+*.aab
+*.jks
+*.keystore
+local.properties
+
+# Backups and operational exports
 backup*/
 backups/
 *.tar
@@ -29,6 +37,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Node / misc, se in futuro aggiungi tooling
+# Node / misc tooling
 node_modules/
 dist/
