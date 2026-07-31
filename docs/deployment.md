@@ -1,66 +1,60 @@
-# Deployment Guide — PwaTruckPocket
+# Deployment — PwaTruckPocket
 
-## 1. Prerequisites
+## Prerequisites
 
-- Docker and Docker Compose
-- Domain managed by Cloudflare
-- Cloudflare Zero Trust Tunnel
-- Telegram bot token and chat ID
+- Linux host or workstation;
+- Docker Engine;
+- Docker Compose v2;
+- `curl` for setup verification.
 
-## 2. Environment
+A local demo requires no domain, Cloudflare account or Telegram bot.
 
-```bash
-cp .env.example .env
-nano .env
-```
-
-Required values:
-
-```env
-PUBLIC_BASE_URL=https://your-domain.example.com
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-CLOUDFLARE_TOKEN=your_cloudflare_token
-```
-
-## 3. Frontend URL
-
-Open `index.html` and replace:
-
-```js
-const PB_URL = 'INSERT_URL_HERE';
-```
-
-with:
-
-```js
-const PB_URL = 'https://your-domain.example.com';
-```
-
-## 4. Start stack
+## Guided local installation
 
 ```bash
-docker compose up -d
-docker compose ps
+git clone https://github.com/Student13Thirteen/pwatruckpocket.git
+cd pwatruckpocket
+bash pwatruckpocket setup
 ```
 
-## 5. Cloudflare route
+Choose local mode. The script generates credentials, builds PocketBase, applies the tracked schema migration, creates the synthetic driver and waits for the health endpoint.
 
-Route your hostname to:
+Verify:
+
+```bash
+bash pwatruckpocket doctor
+bash pwatruckpocket credentials
+bash pwatruckpocket demo
+```
+
+## Remote access through Cloudflare Tunnel
+
+Create a remotely managed Cloudflare Tunnel. Configure its Public Hostname service as:
 
 ```text
 http://pocketbase:8090
 ```
 
-## 6. PocketBase setup
+Run setup and choose Cloudflare mode. Enter the public HTTPS URL and tunnel token when requested. The token remains in the local `.env`; the tunnel container is activated only for remote mode.
 
-Create the required collections described in [`pocketbase-schema.md`](pocketbase-schema.md).
+## Optional Telegram notifications
 
-## 7. Functional test
+Setup can store a Telegram bot token and chat identifier. When left blank, operational records and the local demo continue to work; notification records remain a separate optional integration.
 
-1. Create a test driver user.
-2. Login from a mobile browser.
-3. Submit a status.
-4. Upload a small test document/image.
-5. Confirm Telegram notification.
-6. Check the record in PocketBase.
+## Existing installation
+
+The migration is additive and applies automatically when PocketBase starts. Before moving an existing runtime into this repository layout:
+
+1. create a tested backup of `pb_data`;
+2. compare collection fields and access rules;
+3. test the migration on a copy;
+4. never point the public demo at production records.
+
+## Remove the demo
+
+```bash
+bash pwatruckpocket stop
+rm -rf pb_data backups .env
+```
+
+This deletes local runtime data. It does not affect any remote production deployment unless that data was deliberately copied into this directory.
