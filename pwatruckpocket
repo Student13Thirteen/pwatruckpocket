@@ -4,11 +4,22 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$ROOT_DIR/.env"
 BACKUP_DIR="$ROOT_DIR/backups"
+DATA_VOLUME="pwatruckpocket_pocketbase-data"
 
 if [[ -t 1 ]]; then
-  BOLD='\033[1m'; BLUE='\033[34m'; GREEN='\033[32m'; YELLOW='\033[33m'; RED='\033[31m'; RESET='\033[0m'
+  BOLD='\033[1m'
+  BLUE='\033[34m'
+  GREEN='\033[32m'
+  YELLOW='\033[33m'
+  RED='\033[31m'
+  RESET='\033[0m'
 else
-  BOLD=''; BLUE=''; GREEN=''; YELLOW=''; RED=''; RESET=''
+  BOLD=''
+  BLUE=''
+  GREEN=''
+  YELLOW=''
+  RED=''
+  RESET=''
 fi
 
 info() { printf "%b%s%b\n" "$BLUE" "$*" "$RESET"; }
@@ -34,12 +45,14 @@ Usage:
 USAGE
 }
 
-need() { command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"; }
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
 
 require_docker() {
   need docker
-  docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required."
-  docker info >/dev/null 2>&1 || die "Docker daemon is not reachable."
+  docker compose version >/dev/null 2>&1 || die 'Docker Compose v2 is required.'
+  docker info >/dev/null 2>&1 || die 'Docker daemon is not reachable.'
 }
 
 random_hex() {
@@ -74,7 +87,7 @@ env_escape() {
 }
 
 load_env() {
-  [[ -f "$ENV_FILE" ]] || die "Missing .env. Run: bash pwatruckpocket setup"
+  [[ -f "$ENV_FILE" ]] || die 'Missing .env. Run: bash pwatruckpocket setup'
   set -a
   # shellcheck disable=SC1090
   source "$ENV_FILE"
@@ -126,29 +139,62 @@ wait_for_pocketbase() {
     sleep 3
   done
   printf '\n'
+  compose logs --tail=120 pocketbase >&2 || true
   die 'PocketBase did not become healthy in time.'
 }
 
-create_demo_accounts() {
-  local response token create_response http_code
-  compose exec -T pocketbase /pb/pocketbase superuser create "$PB_SUPERUSER_EMAIL" "$PB_SUPERUSER_PASSWORD" >/dev/null 2>&1 || true
-
+admin_token() {
+  local response token
   response="$(curl -fsS "http://127.0.0.1:${PB_PORT}/api/collections/_superusers/auth-with-password" \
     -H 'Content-Type: application/json' \
     --data "{\"identity\":\"$PB_SUPERUSER_EMAIL\",\"password\":\"$PB_SUPERUSER_PASSWORD\"}")"
   token="$(printf '%s' "$response" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
   [[ -n "$token" ]] || die 'Could not authenticate the local PocketBase superuser.'
+  printf '%s' "$token"
+}
+
+create_demo_account() {
+  local token create_response http_code driver_code
+  token="$(admin_token)"
 
   create_response="$(curl -sS -w '\n%{http_code}' "http://127.0.0.1:${PB_PORT}/api/collections/users/records" \
     -H "Authorization: $token" \
     -H 'Content-Type: application/json' \
     --data "{\"email\":\"$DEMO_DRIVER_EMAIL\",\"password\":\"$DEMO_DRIVER_PASSWORD\",\"passwordConfirm\":\"$DEMO_DRIVER_PASSWORD\",\"name\":\"$DEMO_DRIVER_NAME\",\"role\":\"driver\",\"language\":\"it\",\"active\":true}")"
   http_code="$(printf '%s' "$create_response" | tail -n1)"
+
   case "$http_code" in
-    200|201) ok 'Demo driver created.' ;;
-    400) warn 'Demo driver already exists; keeping the current record.' ;;
-    *) die "Demo driver creation failed: HTTP $http_code" ;;
+    200|201)
+      ok 'Synthetic demo driver created.'
+      ;;
+    400)
+      driver_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:${PB_PORT}/api/collections/users/auth-with-password" \
+        -H 'Content-Type: application/json' \
+        --data "{\"identity\":\"$DEMO_DRIVER_EMAIL\",\"password\":\"$DEMO_DRIVER_PASSWORD\"}" || true)"
+      if [[ "$driver_code" == 200 ]]; then
+        ok 'Synthetic demo driver already exists.'
+      else
+        die 'A driver with the demo email already exists but its generated password does not match the current .env.'
+      fi
+      ;;
+    *)
+      die "Demo driver creation failed: HTTP $http_code"
+      ;;
   esac
+}
+
+print_ready() {
+  printf '\n%bReady.%b\n' "$GREEN$BOLD" "$RESET"
+  printf 'URL:      %s\nDriver:   %s\nPassword: %s\n' "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL" "$DEMO_DRIVER_PASSWORD"
+  printf '\nRun: bash pwatruckpocket doctor && bash pwatruckpocket demo\n'
+}
+
+start_stack() {
+  compose config --quiet
+  compose up -d --build --remove-orphans
+  wait_for_pocketbase
+  create_demo_account
 }
 
 setup() {
@@ -158,10 +204,13 @@ setup() {
   mkdir -p "$BACKUP_DIR"
 
   printf "%bPwaTruckPocket guided setup%b\n\n" "$BOLD" "$RESET"
+
   if [[ -f "$ENV_FILE" ]]; then
-    read -r -p '.env already exists. Replace it? [y/N] ' answer
-    [[ "${answer,,}" == y ]] || die 'Setup cancelled; current configuration was preserved.'
-    cp "$ENV_FILE" "$ENV_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+    warn 'Existing configuration detected; reusing it without rotating credentials.'
+    load_env
+    start_stack
+    print_ready
+    return
   fi
 
   local app_name super_email driver_name driver_email mode_choice deployment_mode bind_address port public_url tunnel_token=""
@@ -170,8 +219,8 @@ setup() {
   app_name="$(read_default 'Application display name' 'PwaTruckPocket Drivers')"
   [[ "$app_name" =~ ^[[:alnum:]À-ÿ._\ -]+$ ]] || die 'Use letters, numbers, spaces, dots, dashes or underscores in the display name.'
   super_email="$(read_default 'Local PocketBase administrator email' 'admin@example.com')"
-  driver_name="$(read_default 'Demo driver name' 'Mario Demo')"
-  driver_email="$(read_default 'Demo driver email' 'driver@example.com')"
+  driver_name="$(read_default 'Synthetic demo driver name' 'Mario Demo')"
+  driver_email="$(read_default 'Synthetic demo driver email' 'driver@example.com')"
   port="$(read_default 'Local HTTP port' '8090')"
   if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1024 || port > 65535 )); then
     die 'Port must be between 1024 and 65535.'
@@ -193,7 +242,9 @@ setup() {
       tunnel_token="$(read_secret 'Cloudflare tunnel token')"
       [[ -n "$tunnel_token" ]] || die 'Cloudflare token is required for remote mode.'
       ;;
-    *) die 'Choose 1 or 2.' ;;
+    *)
+      die 'Choose 1 or 2.'
+      ;;
   esac
 
   read -r -p 'Configure Telegram notifications now? [y/N] ' telegram_answer
@@ -223,44 +274,32 @@ TELEGRAM_BOT_TOKEN="$telegram_token"
 TELEGRAM_CHAT_ID="$telegram_chat"
 CLOUDFLARE_TOKEN="$tunnel_token"
 ENV
+
   chmod 600 "$ENV_FILE.tmp"
   mv "$ENV_FILE.tmp" "$ENV_FILE"
   load_env
-
-  compose config --quiet
-  info 'Building and starting the self-contained demo...'
-  compose up -d --build --remove-orphans
-  wait_for_pocketbase
-  create_demo_accounts
-
-  printf '\n%bReady.%b\n' "$GREEN$BOLD" "$RESET"
-  printf 'URL:      %s\nDriver:   %s\nPassword: %s\n' "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL" "$DEMO_DRIVER_PASSWORD"
-  printf '\nRun: bash pwatruckpocket doctor && bash pwatruckpocket demo\n'
+  start_stack
+  print_ready
 }
 
 start() {
   require_docker
+  need curl
   load_env
-  compose config --quiet
-  compose up -d --build --remove-orphans
-  wait_for_pocketbase
+  start_stack
   ok "Started: $PUBLIC_BASE_URL"
 }
 
 stop() {
   require_docker
-  if [[ -f "$ENV_FILE" ]]; then
-    load_env
-  fi
+  load_env
   compose down
-  ok 'Stopped; pb_data was preserved.'
+  ok 'Stopped; the managed PocketBase data volume was preserved.'
 }
 
 status() {
   require_docker
-  if [[ -f "$ENV_FILE" ]]; then
-    load_env
-  fi
+  load_env
   compose ps
 }
 
@@ -290,13 +329,9 @@ doctor() {
     failures=$((failures+1))
   fi
 
-  if [[ -f "$ENV_FILE" ]]; then
-    ok '[ok] .env exists'
-    load_env
-  else
-    warn '[fail] .env missing'
-    failures=$((failures+1))
-  fi
+  [[ -f "$ENV_FILE" ]] || die '[fail] .env missing; run setup first.'
+  ok '[ok] .env exists'
+  load_env
 
   if compose config --quiet >/dev/null 2>&1; then
     ok '[ok] Compose configuration valid'
@@ -321,13 +356,26 @@ doctor() {
       failures=$((failures+1))
     fi
 
-    auth_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 "http://127.0.0.1:${PB_PORT}/api/collections/users/auth-with-password" -H 'Content-Type: application/json' --data "{\"identity\":\"$DEMO_DRIVER_EMAIL\",\"password\":\"$DEMO_DRIVER_PASSWORD\"}" || true)"
+    auth_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 \
+      "http://127.0.0.1:${PB_PORT}/api/collections/users/auth-with-password" \
+      -H 'Content-Type: application/json' \
+      --data "{\"identity\":\"$DEMO_DRIVER_EMAIL\",\"password\":\"$DEMO_DRIVER_PASSWORD\"}" || true)"
     if [[ "$auth_code" == 200 ]]; then
-      ok '[ok] demo driver login'
+      ok '[ok] synthetic demo driver login'
     else
       warn "[fail] demo driver login: HTTP $auth_code"
       failures=$((failures+1))
     fi
+  else
+    warn '[fail] curl missing'
+    failures=$((failures+1))
+  fi
+
+  if docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
+    ok '[ok] managed data volume exists'
+  else
+    warn '[fail] managed data volume missing'
+    failures=$((failures+1))
   fi
 
   mode="$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%Lp' "$ENV_FILE" 2>/dev/null || printf '?')"
@@ -348,16 +396,27 @@ backup() {
   require_docker
   load_env
   mkdir -p "$BACKUP_DIR"
-  local stamp target
+  docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1 || die 'PocketBase data volume does not exist.'
+
+  local stamp filename target
   stamp="$(date +%Y%m%d_%H%M%S)"
-  target="$BACKUP_DIR/pwatruckpocket-$stamp.tar.gz"
-  info 'Stopping PocketBase briefly for a consistent pb_data snapshot...'
+  filename="pwatruckpocket-$stamp.tar.gz"
+  target="$BACKUP_DIR/$filename"
+
+  info 'Stopping PocketBase briefly for a consistent data-volume snapshot...'
   compose stop pocketbase
   trap 'compose start pocketbase >/dev/null 2>&1 || true' EXIT
-  tar -C "$ROOT_DIR" -czf "$target" pb_data
+
+  docker run --rm \
+    -v "$DATA_VOLUME:/data:ro" \
+    -v "$BACKUP_DIR:/backup" \
+    alpine:3.21 \
+    tar -czf "/backup/$filename" -C /data .
+
   compose start pocketbase >/dev/null
   trap - EXIT
   wait_for_pocketbase
+  [[ -s "$target" ]] || die 'Backup archive was not created correctly.'
   ok "Backup created: $target"
 }
 
@@ -366,6 +425,7 @@ update_stack() {
   load_env
   backup
   compose build --pull pocketbase
+  compose pull tunnel >/dev/null 2>&1 || true
   compose up -d --remove-orphans
   wait_for_pocketbase
   ok 'Update completed.'
@@ -373,13 +433,15 @@ update_stack() {
 
 credentials() {
   load_env
-  printf 'URL:      %s\nDriver:   %s\nPassword: %s\nAdmin:    %s\n' "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL" "$DEMO_DRIVER_PASSWORD" "$PB_SUPERUSER_EMAIL"
+  printf 'URL:      %s\nDriver:   %s\nPassword: %s\nAdmin:    %s\n' \
+    "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL" "$DEMO_DRIVER_PASSWORD" "$PB_SUPERUSER_EMAIL"
 }
 
 demo() {
   load_env
   printf "%bThree-minute demo%b\n\n" "$BOLD" "$RESET"
-  printf '1. Open %s\n2. Login as %s\n3. Send a trip status.\n4. Upload a synthetic image or PDF.\n5. Switch the browser offline, send another item, then reconnect and press Sync.\n6. Open History and show only the authenticated driver records.\n' "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL"
+  printf '1. Open %s\n2. Login as %s\n3. Send a trip status.\n4. Upload a synthetic image or PDF.\n5. Switch the browser offline, send another item, then reconnect and press Sync.\n6. Open History and show only the authenticated driver records.\n' \
+    "$PUBLIC_BASE_URL" "$DEMO_DRIVER_EMAIL"
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
     printf '7. Confirm the server-side Telegram notification.\n'
   else
