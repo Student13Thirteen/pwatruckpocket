@@ -2,7 +2,7 @@ FROM alpine:3.21
 
 ARG PB_VERSION=0.39.9
 
-RUN apk add --no-cache ca-certificates curl unzip \
+RUN apk add --no-cache ca-certificates curl unzip su-exec \
   && curl -fsSL "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_amd64.zip" -o /tmp/pocketbase.zip \
   && unzip /tmp/pocketbase.zip -d /pb \
   && rm /tmp/pocketbase.zip \
@@ -22,7 +22,6 @@ COPY --chown=pocketbase:pocketbase docker-entrypoint.sh /pb/docker-entrypoint.sh
 
 RUN chmod +x /pb/docker-entrypoint.sh
 
-USER pocketbase
 EXPOSE 8090
 
 ENTRYPOINT ["/pb/docker-entrypoint.sh"]
