@@ -105,7 +105,7 @@ migrate((app) => {
         { name: "attempts", type: "number", required: false, min: 0, max: 100 },
         { name: "last_error", type: "text", required: false, max: 2000 }
       ],
-      indexes: ["CREATE INDEX idx_telegram_queue_status_created ON telegram_queue (status, created)"]
+      indexes: ["CREATE INDEX idx_telegram_queue_status ON telegram_queue (status)"]
     })
     app.save(queue)
   }
