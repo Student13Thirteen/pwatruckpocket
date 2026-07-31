@@ -16,6 +16,7 @@ show_diagnostics() {
   printf '\n--- PocketBase logs ---\n' >&2
   docker compose logs --no-color --tail=250 pocketbase >&2 || true
 }
+trap 'show_diagnostics' ERR
 
 cat > .env <<'ENV'
 DEPLOYMENT_MODE="local"
@@ -50,14 +51,9 @@ for _ in $(seq 1 80); do
   sleep 2
 done
 
-if [[ "$healthy" != true ]]; then
-  show_diagnostics
-  exit 1
-fi
-
+[[ "$healthy" == true ]]
 curl -fsS http://127.0.0.1:18090/ | grep -q 'PwaTruckPocket CI'
 
-# The entrypoint applies migrations and creates the encrypted local superuser.
 ADMIN_RESPONSE="$(curl -fsS http://127.0.0.1:18090/api/collections/_superusers/auth-with-password \
   -H 'Content-Type: application/json' \
   --data '{"identity":"admin@example.com","password":"CI_admin_password_1234"}')"
@@ -82,7 +78,9 @@ COUNT="$(curl -fsS 'http://127.0.0.1:18090/api/collections/stati_viaggio/records
   -H "Authorization: $DRIVER_TOKEN" | python3 -c 'import json,sys; print(json.load(sys.stdin)["totalItems"])')"
 [[ "$COUNT" == "1" ]]
 
-ANON_CODE="$(curl -sS -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18090/api/collections/stati_viaggio/records?perPage=10')"
-[[ "$ANON_CODE" == "403" || "$ANON_CODE" == "401" ]]
+ANON_COUNT="$(curl -fsS 'http://127.0.0.1:18090/api/collections/stati_viaggio/records?perPage=10' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["totalItems"])')"
+[[ "$ANON_COUNT" == "0" ]]
 
+trap - ERR
 echo 'Clean-room smoke test passed.'
