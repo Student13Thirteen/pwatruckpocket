@@ -6,9 +6,16 @@ cd "$ROOT_DIR"
 
 cleanup() {
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
-  rm -rf pb_data .env
+  rm -f .env
 }
 trap cleanup EXIT
+
+show_diagnostics() {
+  printf '\n--- docker compose ps ---\n' >&2
+  docker compose ps -a >&2 || true
+  printf '\n--- PocketBase logs ---\n' >&2
+  docker compose logs --no-color --tail=250 pocketbase >&2 || true
+}
 
 cat > .env <<'ENV'
 DEPLOYMENT_MODE="local"
@@ -28,19 +35,26 @@ TELEGRAM_CHAT_ID=""
 CLOUDFLARE_TOKEN=""
 ENV
 
-mkdir -p pb_data
-
 docker compose config --quiet
 docker compose up -d --build pocketbase
 
+healthy=false
 for _ in $(seq 1 80); do
   if curl -fsS http://127.0.0.1:18090/api/health >/dev/null 2>&1; then
+    healthy=true
+    break
+  fi
+  if [[ "$(docker compose ps -q pocketbase 2>/dev/null)" == "" ]]; then
     break
   fi
   sleep 2
 done
 
-curl -fsS http://127.0.0.1:18090/api/health >/dev/null
+if [[ "$healthy" != true ]]; then
+  show_diagnostics
+  exit 1
+fi
+
 curl -fsS http://127.0.0.1:18090/ | grep -q 'PwaTruckPocket CI'
 
 docker compose exec -T pocketbase /pb/pocketbase superuser create admin@example.com CI_admin_password_1234 >/dev/null
