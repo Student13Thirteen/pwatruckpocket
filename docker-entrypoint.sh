@@ -15,6 +15,9 @@ escape_sed() {
   printf '%s' "$1" | sed 's/[\\&|]/\\&/g'
 }
 
+mkdir -p /pb/pb_data
+chown -R pocketbase:pocketbase /pb/pb_data
+
 cp /pb/template/index.html /pb/pb_public/index.html
 sed -i \
   -e "s|INSERT_URL_HERE|$(escape_sed "$PUBLIC_BASE_URL")|g" \
@@ -22,8 +25,9 @@ sed -i \
   -e "s|Netfleet Autisti|$(escape_sed "$APP_DISPLAY_NAME")|g" \
   -e "s|const USE_CLIENT_ID_FIELD = false;|const USE_CLIENT_ID_FIELD = true;|" \
   /pb/pb_public/index.html
+chown pocketbase:pocketbase /pb/pb_public/index.html
 
-exec /pb/pocketbase serve \
+exec su-exec pocketbase:pocketbase /pb/pocketbase serve \
   --http=0.0.0.0:8090 \
   --dir=/pb/pb_data \
   --hooksDir=/pb/pb_hooks \
