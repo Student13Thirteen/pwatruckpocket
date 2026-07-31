@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 cleanup() {
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
-  rm -f .env
+  rm -rf .env backups
 }
 trap cleanup EXIT
 
@@ -86,5 +86,9 @@ ANON_COUNT="$(curl -fsS 'http://127.0.0.1:18090/api/collections/stati_viaggio/re
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["totalItems"])')"
 [[ "$ANON_COUNT" == "0" ]]
 
+bash pwatruckpocket backup
+find backups -maxdepth 1 -type f -name 'pwatruckpocket-*.tar.gz' -size +0c | grep -q .
+curl -fsS http://127.0.0.1:18090/api/health >/dev/null
+
 trap - ERR
-echo 'Clean-room smoke test passed.'
+echo 'Clean-room smoke test passed, including backup and restart.'
