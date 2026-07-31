@@ -1,13 +1,15 @@
 {
-  "name": "App Autisti Netfleet",
-  "short_name": "Autisti",
+  "name": "PwaTruckPocket — Driver Operations",
+  "short_name": "TruckPocket",
+  "description": "Offline-first driver operations app for trip status and travel documents.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#f8fafc",
   "theme_color": "#10b981",
   "lang": "it",
   "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "icons/icon-192.png?v=2",
