@@ -1,3 +1,5 @@
+name: pwatruckpocket
+
 services:
   pocketbase:
     build:
@@ -17,7 +19,7 @@ services:
     ports:
       - "${PB_BIND_ADDRESS:-127.0.0.1}:${PB_PORT:-8090}:8090"
     volumes:
-      - ./pb_data:/pb/pb_data
+      - pocketbase-data:/pb/pb_data
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8090/api/health >/dev/null 2>&1"]
       interval: 10s
@@ -40,6 +42,9 @@ services:
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TOKEN}
     networks:
       - pwa-net
+
+volumes:
+  pocketbase-data:
 
 networks:
   pwa-net:
